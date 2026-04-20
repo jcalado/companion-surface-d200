@@ -1,5 +1,5 @@
 import type { SomeCompanionInputField } from '@companion-surface/base'
-import { SmallWindowMode } from './protocol.js'
+import { SmallWindowMode, isValidSmallWindowMode } from './protocol.js'
 
 export const CONFIG_FIELDS: SomeCompanionInputField[] = [
 	{
@@ -7,11 +7,21 @@ export const CONFIG_FIELDS: SomeCompanionInputField[] = [
 		type: 'dropdown',
 		label: 'Small window display',
 		choices: [
-			{ id: String(SmallWindowMode.CLOCK), label: 'Analog dial clock' },
+			{ id: String(SmallWindowMode.DIAL), label: 'Analog dial clock' },
+			{ id: String(SmallWindowMode.DIGITAL_TIME), label: 'Digital: time' },
+			{ id: String(SmallWindowMode.DIGITAL_TIME_WEEKDAY), label: 'Digital: time + weekday' },
+			{ id: String(SmallWindowMode.DIGITAL_TIME_DATE), label: 'Digital: time + date' },
+			{ id: String(SmallWindowMode.DIGITAL_DATE_TIME_WEEKDAY), label: 'Digital: date + time + weekday' },
 			{ id: String(SmallWindowMode.STATS), label: 'System stats (CPU / memory)' },
 			{ id: String(SmallWindowMode.BACKGROUND), label: 'Background image' },
 		],
-		default: String(SmallWindowMode.CLOCK),
+		default: String(SmallWindowMode.DIAL),
+	},
+	{
+		id: 'twelveHour',
+		type: 'checkbox',
+		label: 'Use 12-hour clock (digital modes)',
+		default: false,
 	},
 	{
 		id: 'backgroundImagePath',
@@ -23,6 +33,5 @@ export const CONFIG_FIELDS: SomeCompanionInputField[] = [
 
 export function parseSmallWindowMode(value: unknown): SmallWindowMode {
 	const n = Number(value)
-	if (n === SmallWindowMode.STATS || n === SmallWindowMode.BACKGROUND || n === SmallWindowMode.CLOCK) return n
-	return SmallWindowMode.CLOCK
+	return isValidSmallWindowMode(n) ? n : SmallWindowMode.DIAL
 }

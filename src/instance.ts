@@ -87,6 +87,9 @@ export class D200Surface implements SurfaceInstance {
 			await this.#loadBackground(this.#backgroundPath)
 			if (this.#initialPushDone) await this.#flush(false)
 		}
+		if (config.twelveHour !== undefined) {
+			this.#device.setTwelveHour(Boolean(config.twelveHour))
+		}
 		if (config.smallWindowMode !== undefined) {
 			this.#device.setSmallWindowMode(parseSmallWindowMode(config.smallWindowMode))
 		}

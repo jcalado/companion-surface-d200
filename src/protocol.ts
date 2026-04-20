@@ -42,10 +42,44 @@ export enum Command {
 	IN_DEVICE_INFO = 0x0303,
 }
 
+/**
+ * Mode byte for the small window, emitted as the first field of
+ * `OUT_SET_SMALL_WINDOW_DATA`. IDs confirmed from USBPcap captures of
+ * Ulanzi Studio:
+ *
+ *   0   — CPU + RAM + GPU stats
+ *   1   — analog dial clock (Studio calls this "dial time")
+ *   2   — background image (requires a prior SET_BUTTONS with
+ *         SmallViewMode:2 + Icon on the 3_2 slot)
+ *   200 — digital: date + time + weekday ("YYYY/MM/DD Weekday" suffix)
+ *   201 — digital: time + weekday ("Weekday" suffix)
+ *   202 — digital: time + date ("YYYY/MM/DD" suffix)
+ *   203 — digital: time only (no suffix)
+ */
 export enum SmallWindowMode {
 	STATS = 0,
-	CLOCK = 1,
+	DIAL = 1,
 	BACKGROUND = 2,
+	DIGITAL_DATE_TIME_WEEKDAY = 200,
+	DIGITAL_TIME_WEEKDAY = 201,
+	DIGITAL_TIME_DATE = 202,
+	DIGITAL_TIME = 203,
+}
+
+const DIGITAL_MODES = new Set<number>([
+	SmallWindowMode.DIGITAL_DATE_TIME_WEEKDAY,
+	SmallWindowMode.DIGITAL_TIME_WEEKDAY,
+	SmallWindowMode.DIGITAL_TIME_DATE,
+	SmallWindowMode.DIGITAL_TIME,
+])
+
+export function isValidSmallWindowMode(n: number): n is SmallWindowMode {
+	return (
+		n === SmallWindowMode.STATS ||
+		n === SmallWindowMode.DIAL ||
+		n === SmallWindowMode.BACKGROUND ||
+		DIGITAL_MODES.has(n)
+	)
 }
 
 /** Build the first framed packet: `[0x7c 0x7c][cmd:2 BE][length:4 LE][data padded to 1016]` */
@@ -165,14 +199,55 @@ export interface SmallWindowData {
 	cpu?: number
 	mem?: number
 	gpu?: number
-	time?: string // HH:MM:SS
+	/** HH:MM:SS — always 24-hour; the device renders 12H/24H based on the format marker. */
+	time?: string
+	/** YYYY/MM/DD — only used by modes 200 / 202. */
+	date?: string
+	/** Abbreviated weekday ("Sun".."Sat") — only used by modes 200 / 201. */
+	weekday?: string
+	/** True to display 12-hour clock on the device. Defaults to 24-hour. */
+	twelveHour?: boolean
+}
+
+const WEEKDAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+function pad2(n: number): string {
+	return n < 10 ? `0${n}` : String(n)
+}
+
+/** Build the default runtime data (current local time/date/weekday). */
+export function currentSmallWindowFields(): { time: string; date: string; weekday: string } {
+	const d = new Date()
+	return {
+		time: `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`,
+		date: `${d.getFullYear()}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`,
+		weekday: WEEKDAY_ABBR[d.getDay()],
+	}
 }
 
 export function encodeSmallWindow(data: SmallWindowData): Buffer {
-	const mode = data.mode ?? SmallWindowMode.CLOCK
+	const mode = data.mode ?? SmallWindowMode.DIAL
 	const cpu = data.cpu ?? 0
 	const mem = data.mem ?? 0
 	const gpu = data.gpu ?? 0
-	const time = data.time ?? new Date().toISOString().substring(11, 19)
-	return Buffer.from(`${mode}|${cpu}|${mem}|${time}|${gpu}`, 'utf8')
+	const defaults = currentSmallWindowFields()
+	const time = data.time ?? defaults.time
+	const format = data.twelveHour ? '12H' : '24H'
+
+	let suffix = ''
+	switch (mode) {
+		case SmallWindowMode.DIGITAL_DATE_TIME_WEEKDAY:
+			suffix = `${data.date ?? defaults.date} ${data.weekday ?? defaults.weekday}`
+			break
+		case SmallWindowMode.DIGITAL_TIME_WEEKDAY:
+			suffix = data.weekday ?? defaults.weekday
+			break
+		case SmallWindowMode.DIGITAL_TIME_DATE:
+			suffix = data.date ?? defaults.date
+			break
+		default:
+			// STATS, DIAL, BACKGROUND, DIGITAL_TIME → empty suffix after the marker
+			break
+	}
+	return Buffer.from(`${mode}|${cpu}|${mem}|${time}|${gpu}|${format}|${suffix}`, 'utf8')
 }

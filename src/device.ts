@@ -35,7 +35,8 @@ export class D200Device extends EventEmitter<D200Events> {
 	#writeQueue: Promise<void> = Promise.resolve()
 	#keepAlive?: NodeJS.Timeout
 	#closed = false
-	#smallWindowMode: SmallWindowMode = SmallWindowMode.CLOCK
+	#smallWindowMode: SmallWindowMode = SmallWindowMode.DIAL
+	#twelveHour = false
 	#cpuSample: { idle: number; total: number } = sampleCpu()
 
 	constructor(device: HIDAsync) {
@@ -95,8 +96,13 @@ export class D200Device extends EventEmitter<D200Events> {
 		this.setSmallWindow(this.#buildSmallWindowData()).catch(() => null)
 	}
 
+	setTwelveHour(enabled: boolean): void {
+		this.#twelveHour = enabled
+		this.setSmallWindow(this.#buildSmallWindowData()).catch(() => null)
+	}
+
 	#buildSmallWindowData(): SmallWindowData {
-		const data: SmallWindowData = { mode: this.#smallWindowMode }
+		const data: SmallWindowData = { mode: this.#smallWindowMode, twelveHour: this.#twelveHour }
 		if (this.#smallWindowMode === SmallWindowMode.STATS) {
 			const prev = this.#cpuSample
 			const now = sampleCpu()
