@@ -70,7 +70,6 @@ yarn package   # full package for Companion
 ## Not yet implemented
 
 - `showStatus()` / `CardGenerator` idle card
-- Pincode map
 - Keyboard emulation on interface 1 (intentionally left to `usbhid`)
 
 ## Support the project

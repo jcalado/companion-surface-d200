@@ -10,7 +10,7 @@ import { HIDAsync } from 'node-hid'
 import { CONFIG_FIELDS } from './config.js'
 import { D200Surface } from './instance.js'
 import { D200_INTERFACE_NUMBER, D200_PRODUCT_ID, D200_VENDOR_ID } from './protocol.js'
-import { createSurfaceSchema } from './surface-schema.js'
+import { PINCODE_MAP, createSurfaceSchema } from './surface-schema.js'
 
 export interface D200PluginInfo {
 	device: HIDDevice
@@ -54,7 +54,7 @@ const D200Plugin: SurfacePlugin<D200PluginInfo> = {
 			registerProps: {
 				brightness: true,
 				surfaceLayout: createSurfaceSchema(),
-				pincodeMap: null,
+				pincodeMap: PINCODE_MAP,
 				configFields: CONFIG_FIELDS,
 				location: null,
 			},
