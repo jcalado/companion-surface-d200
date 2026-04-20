@@ -52,8 +52,10 @@ For full details and troubleshooting, see [**SETUP.md**](./SETUP.md).
 - 13 configurable buttons, each with a Companion-rendered icon
 - Brightness control from Companion
 - Button press/release events
-- Small-window status display (clock / system stats), selectable per-surface
-  via the ⚙ **Config** panel
+- Small-window status display — analog dial clock, system stats (CPU / RAM),
+  or a custom background image, selectable per-surface via the ⚙ **Config**
+  panel. Background images are loaded from a local file path (PNG/JPEG),
+  automatically resized and center-cropped to 458×196.
 
 ## Development
 
@@ -65,8 +67,8 @@ yarn package   # full package for Companion
 
 ## Not yet implemented
 
-- Background-image mode for the small window (dropdown choice exists; needs
-  manifest-side image push)
+- Digital-clock small-window modes (time + date / weekday variants — mode IDs
+  `200`–`203` in the protocol are understood but not yet surfaced)
 - `showStatus()` / `CardGenerator` idle card
 - Pincode map
 - Keyboard emulation on interface 1 (intentionally left to `usbhid`)
