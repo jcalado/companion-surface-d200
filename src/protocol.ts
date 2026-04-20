@@ -28,6 +28,8 @@ export const BUTTON_ROWS = 3
 export const BUTTON_COLS = 5
 export const ICON_WIDTH = 196
 export const ICON_HEIGHT = 196
+export const SMALL_WINDOW_BG_WIDTH = 458
+export const SMALL_WINDOW_BG_HEIGHT = 196
 
 export enum Command {
 	OUT_SET_BUTTONS = 0x0001,

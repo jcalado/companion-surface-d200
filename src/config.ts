@@ -7,11 +7,17 @@ export const CONFIG_FIELDS: SomeCompanionInputField[] = [
 		type: 'dropdown',
 		label: 'Small window display',
 		choices: [
-			{ id: String(SmallWindowMode.CLOCK), label: 'Clock' },
+			{ id: String(SmallWindowMode.CLOCK), label: 'Analog dial clock' },
 			{ id: String(SmallWindowMode.STATS), label: 'System stats (CPU / memory)' },
-			{ id: String(SmallWindowMode.BACKGROUND), label: 'Background (from manifest)' },
+			{ id: String(SmallWindowMode.BACKGROUND), label: 'Background image' },
 		],
 		default: String(SmallWindowMode.CLOCK),
+	},
+	{
+		id: 'backgroundImagePath',
+		type: 'textinput',
+		label: 'Background image path (PNG/JPEG, resized and cropped to 458×196)',
+		default: '',
 	},
 ]
 

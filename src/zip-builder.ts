@@ -43,6 +43,18 @@ const DEFAULT_FONT: FontStyle = {
 /** Slot occupied by the small-window status display. */
 export const SMALL_WINDOW_SLOT = { col: 3, row: 2 }
 
+export interface BuildButtonZipOptions {
+	/** PNG for the 458×196 small-window background. When present, `3_2` is built with SmallViewMode:2 + Icon. */
+	backgroundPng?: Buffer
+	/**
+	 * Whether to emit the `3_2` small-window slot in the manifest.
+	 * Full SET_BUTTONS updates should include it (firmware may reject the upload otherwise).
+	 * PARTIAL_UPDATE should omit it so we don't re-upload a large background PNG on every
+	 * button change — the slot persists from the last full upload.
+	 */
+	includeSmallWindowSlot?: boolean
+}
+
 /**
  * Build the ZIP payload the D200 expects. Structure mirrors what Ulanzi Studio
  * sends (captured via USBPcap):
@@ -54,7 +66,10 @@ export const SMALL_WINDOW_SLOT = { col: 3, row: 2 }
  * not be 0x00 or 0x7c. We retry compression with a random dummy file until
  * the payload is safe.
  */
-export async function buildButtonZip(buttons: ButtonRenderInput[]): Promise<Buffer> {
+export async function buildButtonZip(
+	buttons: ButtonRenderInput[],
+	options: BuildButtonZipOptions = {},
+): Promise<Buffer> {
 	const manifest: Record<string, ManifestEntry> = {}
 	const icons = new Map<string, Buffer>()
 
@@ -70,14 +85,28 @@ export async function buildButtonZip(buttons: ButtonRenderInput[]): Promise<Buff
 		manifest[key] = { State: 0, ViewParam: [viewParam] }
 	}
 
-	// The small-window slot must be declared even when we have nothing to put there,
-	// otherwise the firmware may refuse the whole update.
-	const smallKey = `${SMALL_WINDOW_SLOT.col}_${SMALL_WINDOW_SLOT.row}`
-	if (!manifest[smallKey]) {
-		manifest[smallKey] = {
-			State: 0,
-			SmallViewMode: 1,
-			ViewParam: [{ Font: DEFAULT_FONT, Text: '' }],
+	// The small-window slot must be declared on every full SET_BUTTONS upload,
+	// otherwise the firmware may refuse the whole update. When the user has set a
+	// background image, this slot carries SmallViewMode:2 and an Icon; otherwise
+	// SmallViewMode:1 (dial clock placeholder, also used for stats / digital).
+	// Partial updates omit this slot so we don't re-upload the background on every
+	// button change — the slot persists from the last full upload.
+	if (options.includeSmallWindowSlot ?? true) {
+		const smallKey = `${SMALL_WINDOW_SLOT.col}_${SMALL_WINDOW_SLOT.row}`
+		if (options.backgroundPng) {
+			const iconId = randomUUID()
+			icons.set(iconId, options.backgroundPng)
+			manifest[smallKey] = {
+				State: 0,
+				SmallViewMode: 2,
+				ViewParam: [{ Font: DEFAULT_FONT, Icon: `Images/${iconId}.png`, Text: '' }],
+			}
+		} else {
+			manifest[smallKey] = {
+				State: 0,
+				SmallViewMode: 1,
+				ViewParam: [{ Font: DEFAULT_FONT, Text: '' }],
+			}
 		}
 	}
 
@@ -85,7 +114,7 @@ export async function buildButtonZip(buttons: ButtonRenderInput[]): Promise<Buff
 	let retries = 0
 	while (!isPayloadSafe(payload)) {
 		retries++
-		if (retries > 32) throw new Error('Failed to build D200-safe ZIP after 32 retries')
+		if (retries > 64) throw new Error('Failed to build D200-safe ZIP after 64 retries')
 		const dummy = randomBytes(8 * retries).toString('hex')
 		payload = await compress(manifest, icons, dummy)
 	}

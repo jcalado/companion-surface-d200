@@ -8,10 +8,16 @@ import {
 	type ModuleLogger,
 } from '@companion-surface/base'
 import * as imageRs from '@julusian/image-rs'
+import { readFile } from 'node:fs/promises'
 import type { HIDAsync } from 'node-hid'
 import { parseSmallWindowMode } from './config.js'
 import { D200Device } from './device.js'
-import { ICON_HEIGHT, ICON_WIDTH } from './protocol.js'
+import {
+	ICON_HEIGHT,
+	ICON_WIDTH,
+	SMALL_WINDOW_BG_HEIGHT,
+	SMALL_WINDOW_BG_WIDTH,
+} from './protocol.js'
 import { type ButtonRenderInput } from './zip-builder.js'
 import { BUTTON_POSITIONS, controlIdFromIndex, positionFromControlId } from './surface-schema.js'
 
@@ -25,6 +31,8 @@ export class D200Surface implements SurfaceInstance {
 	readonly #pending = new Map<string, ButtonRenderInput>()
 	#flushTimer?: NodeJS.Timeout
 	#initialPushDone = false
+	#backgroundPath = ''
+	#backgroundPng?: Buffer
 
 	public get surfaceId(): string {
 		return this.#surfaceId
@@ -74,8 +82,31 @@ export class D200Surface implements SurfaceInstance {
 	}
 
 	async updateConfig(config: Record<string, any>): Promise<void> {
+		if (typeof config.backgroundImagePath === 'string' && config.backgroundImagePath !== this.#backgroundPath) {
+			this.#backgroundPath = config.backgroundImagePath
+			await this.#loadBackground(this.#backgroundPath)
+			if (this.#initialPushDone) await this.#flush(false)
+		}
 		if (config.smallWindowMode !== undefined) {
 			this.#device.setSmallWindowMode(parseSmallWindowMode(config.smallWindowMode))
+		}
+	}
+
+	async #loadBackground(path: string): Promise<void> {
+		if (!path) {
+			this.#backgroundPng = undefined
+			return
+		}
+		try {
+			const raw = await readFile(path)
+			const encoded = await imageRs.ImageTransformer.fromEncodedImage(raw)
+				.scale(SMALL_WINDOW_BG_WIDTH, SMALL_WINDOW_BG_HEIGHT, 'Fill')
+				.cropCenter(SMALL_WINDOW_BG_WIDTH, SMALL_WINDOW_BG_HEIGHT)
+				.toEncodedImage('png')
+			this.#backgroundPng = Buffer.from(encoded.buffer)
+		} catch (e) {
+			this.#logger.warn(`Failed to load background image "${path}": ${(e as Error).message}`)
+			this.#backgroundPng = undefined
 		}
 	}
 
@@ -136,7 +167,10 @@ export class D200Surface implements SurfaceInstance {
 		const batch = Array.from(this.#pending.values())
 		this.#pending.clear()
 		try {
-			await this.#device.setButtons(batch, { partial: partial && this.#initialPushDone })
+			await this.#device.setButtons(batch, {
+				partial: partial && this.#initialPushDone,
+				backgroundPng: this.#backgroundPng,
+			})
 		} catch (e) {
 			this.#logger.warn(`setButtons failed: ${(e as Error).message}`)
 		}
