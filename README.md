@@ -1,6 +1,6 @@
 # companion-surface-ulanzi-d200
 
-Companion surface plugin for the **Ulanzi Stream Controller D200** — 13 physical
+Companion surface plugin for the **[Ulanzi Stream Controller D200](https://www.ulanzi.com/products/stream-controller-d200)** — 13 physical
 buttons on a 5×3 grid plus a status window, 196×196 px icons.
 
 Built against [`@companion-surface/base`](https://github.com/bitfocus/companion-surface-api).
