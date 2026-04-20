@@ -1,15 +1,28 @@
-# Setup: Ulanzi D200 Companion plugin on Linux
+# Setup: Ulanzi D200 Companion plugin
 
-Tested on Arch Linux (kernel 6.19) with Companion 4.3.0.
+## Supported platforms
 
-## Required
+| Platform | Status | Extra steps |
+|----------|--------|-------------|
+| Windows  | ✅ Works out of the box | None — just build and register as a developer module |
+| Linux    | ⚠️ Works with workarounds | udev rule + USB 2.0 hub (see below) |
+| macOS    | 🤷 Untested | Likely works like Windows; hidraw-style access is default |
+
+Tested on:
+- Windows 10/11 (direct USB connection)
+- Arch Linux (kernel 6.19) with Companion 4.3.0 (via USB-2 hub)
+
+## Required (all platforms)
 
 - **Companion v4.3.0 or newer.** Earlier versions reject `"type": "surface"` in developer manifests (the surface plugin system landed in 4.3.0).
 - **Node.js 22.x.** Matches Companion's `node22` runtime target. Companion spawns the plugin in its bundled Node; yarn/tsc on your workstation should also use Node 22 for local builds (mise/fnm/volta/nvm all fine).
+
+## Linux-only
+
 - **USB 2.0 hub between the D200 and the host.** See [Direct connection vs. USB hub](#direct-connection-vs-usb-hub) below — this is the single most important point. A plain unpowered USB-2 hub works.
 - **udev rule** granting access to the device's `/dev/hidraw*` nodes.
 
-## Build
+## Build (all platforms)
 
 ```bash
 cd d200
@@ -17,7 +30,39 @@ yarn install
 yarn build
 ```
 
-## Install the udev rule
+## Register the plugin with Companion (all platforms)
+
+Companion scans subfolders of a developer modules path.
+
+1. Create a folder (or reuse `~/companion-dev/` on Linux/macOS,
+   `%USERPROFILE%\companion-dev\` on Windows) and put this project (or a
+   symlink) inside it:
+
+   ```bash
+   # Linux / macOS
+   mkdir -p ~/companion-dev
+   ln -s "$(pwd)" ~/companion-dev/companion-surface-d200
+   ```
+
+   On Windows, either copy the project in or use `mklink /D`.
+
+2. In Companion's web UI, open **Settings → Advanced → Developer**.
+3. Toggle **Enable Developer Modules** on.
+4. Click **Select** next to **Developer modules path** and pick the parent
+   folder (not the project folder).
+5. Companion logs:
+
+   ```
+   Instance/Modules  Looking for extra modules in: <path>
+   Instance/Modules  Found new surface module ulanzi-d200@0.0.0 in: <path>/companion-surface-d200
+   ```
+
+6. Enable the module under **Modules → Surfaces → Ulanzi Stream Controller D200**.
+7. Plug the D200 in. Companion lists it under **Surfaces**.
+
+On Windows this is the whole setup. On Linux, continue with the steps below.
+
+## Linux: install the udev rule
 
 ```bash
 sudo ./tools/install-udev.sh
@@ -42,35 +87,7 @@ ls -la /dev/hidraw* | tail -2
 
 The `+` (or `@` in `eza`) indicates an ACL granting access to the active local user.
 
-## Register the plugin with Companion
-
-Companion scans subfolders of a developer modules path.
-
-1. Create a folder (or reuse `~/companion-dev/`) and symlink this project into it:
-
-   ```bash
-   mkdir -p ~/companion-dev
-   ln -s "$(pwd)" ~/companion-dev/companion-surface-d200
-   ```
-
-2. In Companion's web UI, open **Settings → Advanced → Developer**.
-
-3. Toggle **Enable Developer Modules** on.
-
-4. Click **Select** next to **Developer modules path** and pick `~/companion-dev` (the parent, not the project folder).
-
-5. Companion logs:
-
-   ```
-   Instance/Modules  Looking for extra modules in: /home/<user>/companion-dev
-   Instance/Modules  Found new surface module ulanzi-d200@0.0.0 in: /home/<user>/companion-dev/companion-surface-d200
-   ```
-
-6. Enable the module under **Modules → Surfaces → Ulanzi Stream Controller D200**.
-
-7. Plug the D200 in (via the hub). Companion should pick it up and list it under **Surfaces**.
-
-## Direct connection vs. USB hub
+## Linux: direct connection vs. USB hub
 
 **Symptom when connected directly:** the D200's screen lights up with its default buttons, but Companion never sees it. `lsusb` only shows the device as:
 
