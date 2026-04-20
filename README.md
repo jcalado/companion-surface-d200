@@ -71,6 +71,12 @@ yarn package   # full package for Companion
 - Pincode map
 - Keyboard emulation on interface 1 (intentionally left to `usbhid`)
 
+## Support the project
+
+If this plugin is useful to you, you can buy me a coffee at
+[ko-fi.com/jcalado](https://ko-fi.com/jcalado). Support helps keep the project
+maintained and encourages future work (more surfaces, bug fixes, features).
+
 ## License
 
 MIT.
