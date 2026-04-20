@@ -1,0 +1,21 @@
+{
+	"$schema": "../node_modules/@companion-surface/base/assets/manifest.schema.json",
+	"type": "surface",
+	"id": "ulanzi-d200",
+	"name": "Ulanzi Stream Controller D200",
+	"shortname": "ulanzi-d200",
+	"description": "Companion surface plugin for the Ulanzi Stream Controller D200 (13 buttons, 196x196 icons).",
+	"version": "0.0.0",
+	"license": "MIT",
+	"repository": "",
+	"bugs": "",
+	"maintainers": [],
+	"runtime": {
+		"type": "node22",
+		"apiVersion": "0.0.0",
+		"entrypoint": "../dist/main.js"
+	},
+	"keywords": ["ulanzi", "d200", "stream controller", "stream deck"],
+	"products": ["Ulanzi Stream Controller D200"],
+	"usbIds": [{ "vendorId": 8711, "productIds": [25] }]
+}
