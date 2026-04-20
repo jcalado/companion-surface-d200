@@ -8,37 +8,44 @@ Wire protocol reverse-engineered with help from
 [redphx/strmdck](https://github.com/redphx/strmdck) and USBPcap captures of
 Ulanzi Studio.
 
-## Quickstart (Linux)
-
-> ⚠️ **Connect the D200 through a USB 2.0 hub**, not directly to the PC.
-> Direct connection fails to enumerate the device on Linux. See
-> [SETUP.md](./SETUP.md#direct-connection-vs-usb-hub) for the why.
+## Quickstart
 
 You need **Companion 4.3.0+** and **Node 22**.
 
 ```bash
-# 1. Build
 yarn install
 yarn build
-
-# 2. Grant your user access to the device
-sudo ./tools/install-udev.sh
-# then unplug/replug the D200 (through the hub)
-
-# 3. Make Companion see the plugin as a developer module
-mkdir -p ~/companion-dev
-ln -s "$(pwd)" ~/companion-dev/companion-surface-d200
 ```
 
-In Companion's web UI:
+Register the built plugin with Companion as a developer module: create a folder
+(e.g. `~/companion-dev/`) and put this project (or a symlink to it) inside.
+Then in Companion's web UI:
 
 1. **Settings → Advanced → Developer** — toggle **Enable Developer Modules** on,
-   and set **Developer modules path** to `~/companion-dev`.
+   and set **Developer modules path** to the parent folder.
 2. **Modules → Surfaces** — enable **Ulanzi Stream Controller D200**.
-3. Plug in the D200 (through the hub). It appears under **Surfaces**.
+3. Plug in the D200. It appears under **Surfaces**.
 
-For full details, platform-specific notes, and troubleshooting, see
-[**SETUP.md**](./SETUP.md).
+### Windows
+
+That's it — no driver, no udev rule, no hub needed. Plug the D200 directly into
+the PC and it works.
+
+### Linux
+
+Two extra steps:
+
+```bash
+# Grant your user access to the device's hidraw nodes
+sudo ./tools/install-udev.sh
+# then unplug/replug the D200
+```
+
+> ⚠️ **Connect the D200 through a USB 2.0 hub**, not directly to the PC.
+> Direct connection fails to enumerate the HID interface on Linux. See
+> [SETUP.md](./SETUP.md#direct-connection-vs-usb-hub) for the diagnosis.
+
+For full details and troubleshooting, see [**SETUP.md**](./SETUP.md).
 
 ## Features
 
