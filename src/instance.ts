@@ -31,6 +31,7 @@ export class D200Surface implements SurfaceInstance {
 	readonly #pending = new Map<string, ButtonRenderInput>()
 	#flushTimer?: NodeJS.Timeout
 	#initialPushDone = false
+	#statusActive = false
 	#backgroundPath = ''
 	#backgroundPng?: Buffer
 
@@ -153,8 +154,46 @@ export class D200Surface implements SurfaceInstance {
 		this.#scheduleFlush()
 	}
 
-	async showStatus(_signal: AbortSignal, _cards: CardGenerator): Promise<void> {
-		// not implemented
+	async showStatus(signal: AbortSignal, cards: CardGenerator, _statusMessage?: string): Promise<void> {
+		if (signal.aborted) return
+
+		// Keep-alive would overwrite the small-window background on its next tick;
+		// pause it for the duration of the status display. draw() / blank() resume it.
+		this.#device.pauseKeepAlive()
+
+		const [buttonPixels, stripPixels] = await Promise.all([
+			cards.generateLogoCard(ICON_WIDTH, ICON_HEIGHT, 'rgb'),
+			cards.generateLcdStripCard(SMALL_WINDOW_BG_WIDTH, SMALL_WINDOW_BG_HEIGHT, 'rgb'),
+		])
+		if (signal.aborted) return
+
+		const [buttonPng, stripPng] = await Promise.all([
+			imageRs.ImageTransformer.fromBuffer(Buffer.from(buttonPixels), ICON_WIDTH, ICON_HEIGHT, 'rgb')
+				.toEncodedImage('png')
+				.then((e) => Buffer.from(e.buffer)),
+			imageRs.ImageTransformer.fromBuffer(
+				Buffer.from(stripPixels),
+				SMALL_WINDOW_BG_WIDTH,
+				SMALL_WINDOW_BG_HEIGHT,
+				'rgb',
+			)
+				.toEncodedImage('png')
+				.then((e) => Buffer.from(e.buffer)),
+		])
+		if (signal.aborted) return
+
+		const batch: ButtonRenderInput[] = BUTTON_POSITIONS.map((pos) => ({
+			col: pos.col,
+			row: pos.row,
+			iconPng: buttonPng,
+		}))
+
+		try {
+			await this.#device.setButtons(batch, { partial: false, backgroundPng: stripPng })
+			this.#statusActive = true
+		} catch (e) {
+			this.#logger.warn(`showStatus setButtons failed: ${(e as Error).message}`)
+		}
 	}
 
 	#scheduleFlush(): void {
@@ -167,11 +206,25 @@ export class D200Surface implements SurfaceInstance {
 
 	async #flush(partial: boolean): Promise<void> {
 		if (this.#pending.size === 0) return
+		// Returning from a status display: force a full SET_BUTTONS so all 13
+		// slots are repainted (clearing the logo card) and the small-window slot
+		// is rewritten with the configured background / clock mode. Pad missing
+		// slots with blanks so the firmware doesn't drop them from the manifest.
+		let isPartial = partial && this.#initialPushDone
+		if (this.#statusActive) {
+			this.#statusActive = false
+			this.#device.resumeKeepAlive()
+			isPartial = false
+			for (const pos of BUTTON_POSITIONS) {
+				const key = `${pos.col}_${pos.row}`
+				if (!this.#pending.has(key)) this.#pending.set(key, { col: pos.col, row: pos.row })
+			}
+		}
 		const batch = Array.from(this.#pending.values())
 		this.#pending.clear()
 		try {
 			await this.#device.setButtons(batch, {
-				partial: partial && this.#initialPushDone,
+				partial: isPartial,
 				backgroundPng: this.#backgroundPng,
 			})
 		} catch (e) {

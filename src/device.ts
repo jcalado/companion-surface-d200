@@ -78,6 +78,20 @@ export class D200Device extends EventEmitter<D200Events> {
 		}
 	}
 
+	pauseKeepAlive(): void {
+		if (this.#keepAlive) {
+			clearInterval(this.#keepAlive)
+			this.#keepAlive = undefined
+		}
+	}
+
+	resumeKeepAlive(): void {
+		if (this.#keepAlive || this.#closed) return
+		this.#keepAlive = setInterval(() => {
+			this.setSmallWindow(this.#buildSmallWindowData()).catch(() => null)
+		}, 5000)
+	}
+
 	async setBrightness(percent: number): Promise<void> {
 		await this.#writePacket(buildSimplePacket(Command.OUT_SET_BRIGHTNESS, encodeBrightness(percent)))
 	}
