@@ -3,10 +3,28 @@
 Reverse-engineered from:
 - [redphx/strmdck](https://github.com/redphx/strmdck) (Python, MIT)
 - USBPcap captures of Ulanzi Studio on Windows
+- Firmware v5.3.1 binary analysis (see `FIRMWARE.md`)
 
 Everything here is based on firmware `5.3.1` (the version shipped in
 `Win_Ulanzi_Studio_V3.0.16.20260323.exe`). Other firmware revisions may differ
 in manifest keys or command numbers.
+
+## Platform
+
+The D200 runs an **Allwinner T113** SoC (ARM Cortex-A7, hard-float) with an
+OpenWrt-based Linux (glibc, kernel 3.2+). The main application is a C++
+binary (`zkgui`) built on ZKSWE's EasyUI framework. A separate MCU handles
+button/knob scanning and is connected to the T113 over UART (`/dev/ttyS1`).
+
+The USB stack uses Linux's gadget subsystem: `/dev/hidg0` for the deck
+protocol (interface 0) and `/dev/hidg1` for keyboard emulation (interface 1).
+The USB VID `2207` is Rockchip's, reused by the ZKSWE firmware rather than
+reflecting the actual SoC vendor.
+
+The `18d1:d002` companion device uses Google's ADB vendor ID. ADB support is
+likely present in the firmware but disabled in production builds. Source
+references include `/sys/devices/soc0/soc/soc:usbotg/usb_device` for USB
+mode switching.
 
 ---
 
@@ -105,6 +123,28 @@ Incoming commands observed so far:
 | `IN_BUTTON`      | `0x0101` | Button press or release event |
 | `IN_DEVICE_INFO` | `0x0303` | Firmware/device info (JSON, sent after most OUT commands) |
 | `0x010b`         | `0x010b` | Ack/status (seen after each outgoing command). Payload is all zeros so far; safe to ignore. |
+
+### Additional command IDs found in firmware strings
+
+These internal protocol IDs were discovered via firmware binary analysis. They
+are referenced in the device's C++ source (`hid_protocol.cpp`) and may
+correspond to undiscovered wire command numbers:
+
+| Internal name | Notes |
+|---------------|-------|
+| `SETKEYPAD` | May configure button/key mappings |
+| `SETSCREEN_PIC` | Possibly a direct screen-image push (bypassing the ZIP manifest) |
+| `SET_SMALLWINDOW_TO_KNOB` | Displays knob-related content in the small window (rotation indicators, values) |
+| `DRAW_JS_IMG` | Suggests a JavaScript rendering path for dynamic content |
+| `LOCKSCREEN` / `UNLOCKSCREEN` | Lock/unlock the device display; `UNLOCKSCREEN` takes an ID parameter |
+| `UPDATE_BIN` | Host-initiated firmware update over HID |
+| `APP_EXIT` | Terminates the running application |
+| `SHUTDOWN` | Powers off the device |
+| `RUN_RESULT` | Status/result reporting (direction unknown) |
+
+None of these have been captured on the wire yet. Probing for their command
+numbers (sending candidate values and observing responses) could unlock new
+functionality.
 
 ---
 
@@ -220,6 +260,8 @@ Example (reformatted):
 - The device's `IN_BUTTON` reports indices **0–12** in row-major order
   (`idx = row * 5 + col`). Index 13 is the small window (never pressed) and
   14 doesn't exist.
+- **Button icon size is 196×196 pixels** (confirmed by built-in firmware assets).
+  Both PNG and JPEG are accepted.
 
 ---
 
@@ -331,15 +373,29 @@ Afterwards, during normal operation:
 
 - **The `12H|...` suffix** sometimes appended to `OUT_SET_SMALL_WINDOW_DATA`
   payloads. Possibly 12/24-hour clock format toggle + extra flags. Unconfirmed.
-- **Exact format of the `IN_DEVICE_INFO` JSON.** Keys like `SerialNumber` and
-  `Dversion` are visible; the rest depends on firmware.
+- **Exact format of the `IN_DEVICE_INFO` JSON.** Known keys from firmware
+  analysis: `SerialNumber` (alias `firmwareSN`), `Dversion` (alias
+  `firmwareVersion`), `HardwareVersion` (alias `hardwareVersion`). Additional
+  fields may exist.
 - **Background-mode image format** for the small window (`SmallViewMode: 2`).
-  The manifest likely carries an `Icon` on `3_2` pointing at an image inside
-  the ZIP, but we haven't captured this being exercised.
+  The firmware stores user wallpapers at `/data/wallpaper/`. The manifest
+  likely carries an `Icon` on `3_2` pointing at an image inside the ZIP, but
+  we haven't captured this being exercised.
 - **`State` > 0** semantics. Every capture so far uses `State: 0` for all
   slots. Possibly relates to toggle/latched buttons or long-press states.
-- **The `18d1:d002` companion device.** Appears to be an abandoned or
-  placeholder interface from the firmware's ADB-based bootloader. On Windows
-  it enumerates but Studio never talks to it; on Linux it's the only one that
-  *does* enumerate when plugged in directly, but it refuses standard USB
-  control requests. No useful protocol discovered.
+- **The `18d1:d002` companion device.** Uses Google's ADB vendor ID
+  (`18d1`). Firmware analysis confirms ADB/USB-device mode switching code
+  exists (`/sys/devices/soc0/soc/soc:usbotg/usb_device`). Likely an ADB
+  interface disabled in production. On Windows it enumerates but Studio never
+  talks to it; on Linux it's the only one that *does* enumerate when plugged
+  in directly, but it refuses standard USB control requests.
+- **Wire command numbers for firmware-discovered IDs.** The internal names
+  (`SETKEYPAD`, `DRAW_JS_IMG`, `SET_SMALLWINDOW_TO_KNOB`, etc.) are known but
+  their 16-bit command values have not been mapped.
+- **MCU protocol.** A separate microcontroller communicates over UART
+  (`/dev/ttyS1`). The `McuUpdate` class handles MCU firmware updates and
+  `queryMcuVersion` retrieves its version. The MCU likely handles button
+  matrix scanning and knob rotation.
+- **JavaScript rendering.** The `DRAW_JS_IMG` command suggests the device can
+  render dynamic content via a JS engine, not just static PNG/JPEG. The
+  mechanism and supported API are unknown.
