@@ -5,3 +5,4 @@ dist/
 .yarn/
 !.yarn/releases
 .pnp.*
+res-workspace
