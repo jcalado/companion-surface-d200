@@ -134,8 +134,8 @@ correspond to undiscovered wire command numbers:
 |---------------|-------|
 | `SETKEYPAD` | May configure button/key mappings |
 | `SETSCREEN_PIC` | Possibly a direct screen-image push (bypassing the ZIP manifest) |
-| `SET_SMALLWINDOW_TO_KNOB` | Displays knob-related content in the small window (rotation indicators, values) |
-| `DRAW_JS_IMG` | Suggests a JavaScript rendering path for dynamic content |
+| `SET_SMALLWINDOW_TO_KNOB` | Displays knob-related content in the small window (dead on D200, which has no knob hardware) |
+| `DRAW_JS_IMG` | JSON-manifest image push with `data:image/` URI support (see [DRAW_JS_IMG](#draw_js_img)) |
 | `LOCKSCREEN` / `UNLOCKSCREEN` | Lock/unlock the device display; `UNLOCKSCREEN` takes an ID parameter |
 | `UPDATE_BIN` | Host-initiated firmware update over HID |
 | `APP_EXIT` | Terminates the running application |
