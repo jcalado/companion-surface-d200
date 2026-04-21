@@ -19,6 +19,9 @@ version **5.3.1** (MD5: `0b22493ae1178248770857031ba1a97c`).
 | USB VID:PID | `2207:0019` (Rockchip VID reused, actual SoC is Allwinner) |
 | Serial number source | `/sys/class/zkswe_usb/zkswe0/iSerial` |
 | Vendor | Zhuhai Zkswe Technology Co., Ltd ("ZKSWEV1.0" format) |
+| Multi-device firmware | Shared across SSD201, SSD210, and T113 targets. Includes knob support (KNOB_1/2/3) and row 3 grid positions absent on the D200 hardware. |
+| SVG rendering | Links [lunasvg](https://github.com/nicfit/lunasvg) for SVG rasterization |
+| Image codecs | libpng12, libjpeg.9, libwebp.7 (encode + decode), libfreetype.6 |
 
 ---
 
