@@ -11,10 +11,12 @@ in manifest keys or command numbers.
 
 ## Platform
 
-The D200 runs an **Allwinner T113** SoC (ARM Cortex-A7, hard-float) with an
-OpenWrt-based Linux (glibc, kernel 3.2+). The main application is a C++
-binary (`zkgui`) built on ZKSWE's EasyUI framework. A separate MCU handles
-button/knob scanning and is connected to the T113 over UART (`/dev/ttyS1`).
+The D200 runs a **SigmaStar SSD210** SoC (ARM Cortex-A7, hard-float,
+`HardwareVersion: "SSD210V100"` in device info) with an OpenWrt-based Linux
+(glibc, kernel 3.2+). The firmware binary also targets Allwinner T113 and
+SigmaStar SSD201 variants. The main application is a C++ binary (`zkgui`)
+built on ZKSWE's EasyUI framework. A separate MCU handles button scanning and
+is connected to the SoC over UART (`/dev/ttyS1`).
 
 The USB stack uses Linux's gadget subsystem: `/dev/hidg0` for the deck
 protocol (interface 0) and `/dev/hidg1` for keyboard emulation (interface 1).
@@ -253,18 +255,9 @@ Sent on every button press and release.
 
 ### `IN_DEVICE_INFO = 0x0303`
 
-JSON blob describing the device. Seen after almost every successful OUT
-command as a confirmation/keep-alive.
-
-Example (reformatted):
-
-```json
-{
-  "SerialNumber": "02C47A015U3672401",
-  "Dversion": "...",
-  ...
-}
-```
+JSON blob describing the device. Sent after almost every successful OUT
+command as a confirmation/keep-alive, and as the direct response to
+`OUT_GET_DEVICE_INFO` (`0x0003`). See [IN_DEVICE_INFO JSON format](#in_device_info-json-format) for the full schema.
 
 ---
 
