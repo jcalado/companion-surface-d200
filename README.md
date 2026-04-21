@@ -31,6 +31,13 @@ Then in Companion's web UI:
 That's it — no driver, no udev rule, no hub needed. Plug the D200 directly into
 the PC and it works.
 
+> ⚠️ **Ulanzi Studio must not be running.** If Studio is open (or has been
+> auto-launched in the background / from the system tray), the D200 will fire
+> its standalone hotkey HID events (volume up/down, media keys, etc.) *in
+> addition* to Companion button events, so every press triggers twice. Quit
+> Studio fully — including any tray icon — and disable auto-start if it was
+> installed.
+
 ### Linux
 
 Two extra steps:
