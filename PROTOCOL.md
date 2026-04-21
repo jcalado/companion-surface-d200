@@ -403,6 +403,84 @@ Afterwards, during normal operation:
 
 ---
 
+## DRAW_JS_IMG
+
+**Status: discovered in firmware, not yet tested on the wire.**
+
+Despite the name, `DRAW_JS_IMG` has nothing to do with JavaScript. "JS" stands
+for **JSON**. Firmware binary analysis reveals it is a JSON-manifest-based
+image push command, similar to `OUT_SET_BUTTONS` but with two key differences:
+
+1. **No ZIP packaging.** The manifest parser at this code path accepts
+   `data:image/` base64 data URIs directly in the `Icon` field, instead of
+   requiring images as separate files inside a ZIP archive.
+
+2. **Simpler wire format.** If the payload is just a JSON string (no ZIP), it
+   likely fits in a single 1024-byte packet or uses the same chunked framing
+   but without the ZIP layer.
+
+### How we know this
+
+The firmware's manifest parser (`processLayoutValue`) handles the `Icon` field
+by checking for a `data:image/` prefix and decoding inline base64 data using
+`basic_string::substr`. The same parser also reads `IconEx` (extended icon)
+and `ActionParam` fields. The `DRAW_JS_IMG` protocol handler references
+`/tmp/` and `*.png`, suggesting it writes decoded images to `/tmp/` before
+rendering them.
+
+### Potential manifest format
+
+Based on the firmware's parsing code, `DRAW_JS_IMG` likely accepts a manifest
+like:
+
+```json
+{
+  "0_0": {
+    "State": 0,
+    "ViewParam": [
+      {
+        "Font": {
+          "Align": "bottom",
+          "Color": 16777215,
+          "FontName": "Source Han Sans SC",
+          "ShowTitle": true,
+          "Size": 10,
+          "Weight": 80
+        },
+        "Icon": "data:image/png;base64,iVBORw0KGgo...",
+        "Text": "My Button"
+      }
+    ]
+  }
+}
+```
+
+### Why this matters
+
+If `DRAW_JS_IMG` works as the firmware suggests, it could replace the current
+ZIP-based `OUT_SET_BUTTONS` / `OUT_PARTIALLY_UPDATE_BUTTONS` flow. Benefits:
+
+- **Eliminates the bad-byte workaround.** The ZIP chunking bug (bytes at
+  offsets `1016 + 1024*N` must not be `0x00` or `0x7c`) would not apply to a
+  plain JSON payload.
+- **Simplifies the plugin.** No need for `zip-builder.ts`, the dummy-file
+  retry loop, or JSZip as a dependency.
+- **Potentially faster.** Base64 inflates image data by ~33%, but avoiding ZIP
+  compression/decompression and the retry loop could offset that.
+
+### What's needed to use it
+
+1. **Find the wire command number.** The internal name `DRAW_JS_IMG` maps to
+   some 16-bit value in the `Protocol::ID` enum. Probing candidate values
+   (e.g. `0x0002`..`0x0020`, skipping known commands) with a test manifest
+   could find it.
+2. **Confirm `data:image/` support.** Send a manifest with a base64 PNG in
+   the `Icon` field and check if the button renders.
+3. **Check partial-update semantics.** Does it merge like
+   `OUT_PARTIALLY_UPDATE_BUTTONS`, or replace like `OUT_SET_BUTTONS`?
+
+---
+
 ## What's still unknown
 
 - **The `12H|...` suffix** sometimes appended to `OUT_SET_SMALL_WINDOW_DATA`
@@ -425,11 +503,12 @@ Afterwards, during normal operation:
   in directly, but it refuses standard USB control requests.
 - **Wire command numbers for firmware-discovered IDs.** The internal names
   (`SETKEYPAD`, `DRAW_JS_IMG`, `SET_SMALLWINDOW_TO_KNOB`, etc.) are known but
-  their 16-bit command values have not been mapped.
+  their 16-bit command values have not been mapped. `DRAW_JS_IMG` is the
+  highest-priority target (see [DRAW_JS_IMG](#draw_js_img)).
 - **MCU protocol.** A separate microcontroller communicates over UART
   (`/dev/ttyS1`). The `McuUpdate` class handles MCU firmware updates and
   `queryMcuVersion` retrieves its version. The MCU likely handles button
-  matrix scanning and knob rotation.
-- **JavaScript rendering.** The `DRAW_JS_IMG` command suggests the device can
-  render dynamic content via a JS engine, not just static PNG/JPEG. The
-  mechanism and supported API are unknown.
+  matrix scanning.
+- **`IconEx` field semantics.** Parsed alongside `Icon` in the manifest but
+  its purpose is unclear. Possibly used for alternate-state icons (toggle
+  on/off) or hover states.
