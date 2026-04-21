@@ -62,6 +62,14 @@ Companion scans subfolders of a developer modules path.
 
 On Windows this is the whole setup. On Linux, continue with the steps below.
 
+## Windows: quit Ulanzi Studio
+
+> ⚠️ **Ulanzi Studio must not be running.** If Studio is open, or has been
+> auto-launched in the background from the system tray, the D200 fires its
+> standalone hotkey HID events (volume up/down, media keys, etc.) *in addition*
+> to Companion button events, so every press triggers twice. Quit Studio fully,
+> including any tray icon, and disable auto-start if it was installed.
+
 ## Linux: install the udev rule
 
 ```bash
