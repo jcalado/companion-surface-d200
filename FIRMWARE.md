@@ -1,7 +1,9 @@
 # Ulanzi D200 firmware analysis
 
-Reverse-engineered from `Win_Ulanzi_Studio_V3.0.16.20260323.exe`, firmware
-version **5.3.1** (MD5: `0b22493ae1178248770857031ba1a97c`).
+Reverse-engineered from:
+- `Win_Ulanzi_Studio_V3.0.16.20260323.exe` (firmware v5.3.1)
+- Live device access via ADB (command `0xFF` switches USB gadget to ADB mode)
+- Ghidra disassembly of `libzkgui.so`
 
 ---
 
@@ -9,50 +11,215 @@ version **5.3.1** (MD5: `0b22493ae1178248770857031ba1a97c`).
 
 | Detail | Value |
 |--------|-------|
-| SoC | Allwinner T113 (ARM Cortex-A7, hard-float) |
-| OS | Linux 3.2+ (OpenWrt-based, glibc, GCC 6.4.1 cross-toolchain) |
-| Toolchain path | `/home/guoxs/program/c++/zkswe/easyui/platforms/T113/glibc/toolchain/` |
-| Cross triple | `arm-openwrt-linux-gnueabi` |
-| Flash | SPI NOR/NAND, MTD partitions (`/dev/mtd/mtd*`, `/dev/block/mtdblock*`) |
-| Filesystems | JFFS2 (persistent storage), FAT32 (data partition) |
-| USB gadget | HID via `/dev/hidg0` (deck protocol) and `/dev/hidg1` (keyboard emulation) |
-| USB VID:PID | `2207:0019` (Rockchip VID reused, actual SoC is Allwinner) |
-| Serial number source | `/sys/class/zkswe_usb/zkswe0/iSerial` |
-| Vendor | Zhuhai Zkswe Technology Co., Ltd ("ZKSWEV1.0" format) |
-| Multi-device firmware | Shared across SSD201, SSD210, and T113 targets. Includes knob support (KNOB_1/2/3) and row 3 grid positions absent on the D200 hardware. |
-| SVG rendering | Links [lunasvg](https://github.com/nicfit/lunasvg) for SVG rasterization |
-| Image codecs | libpng12, libjpeg.9, libwebp.7 (encode + decode), libfreetype.6 |
+| SoC | **SigmaStar SSD210** (dual Cortex-A7, `HardwareVersion: "SSD210V100"`) |
+| CPU | ARMv7 rev 5 (v7l), 2 cores, hard-float, NEON |
+| RAM | ~64MB (`LX_MEM=0x3FE0000`) |
+| Flash | 16MB SPI NOR |
+| OS | Linux (glibc 2.30, "SStar Soc" in `/proc/cpuinfo`) |
+| Toolchain | `arm-openwrt-linux-gnueabi`, GCC 6.4.1 |
+| Build system | ZKSWE EasyUI / FlyThings (hostname: `flythings`) |
+| Console | UART ttyS0 @ 115200, ttyS1 for MCU |
+| USB gadget | `/sys/class/zkswe_usb/zkswe0/` with `f_hid` and `f_adb` functions |
+| USB VID:PID | `2207:0019` (Rockchip VID reused) |
+| Display | 960x540, rotated 90 degrees (`rotateScreen: 90` in EasyUI.cfg) |
+| Multi-device firmware | Shared across SSD201, SSD210, and T113. Includes knob support absent on D200. |
+| SVG rendering | [lunasvg](https://github.com/nicfit/lunasvg) |
+| Image codecs | libpng12, libjpeg.9, libwebp.7, libfreetype.6 |
+
+---
+
+## Accessing the device via ADB
+
+Sending HID command `0xFF` to the D200 reconfigures the USB gadget from HID to
+ADB mode. The firmware calls `SystemProperties::setString("sys.usb.config", "adb")`
+and closes the HID device. After a few seconds, the D200 enumerates as an ADB
+device.
+
+```bash
+# Send the ADB switch command
+node tools/enable-adb.mjs
+
+# Wait 2-3 seconds, then connect
+adb devices
+adb shell
+```
+
+The shell runs as root (`zkswe@flythings:/ #`). To restore normal HID mode,
+replug the D200.
+
+---
+
+## MTD partition map
+
+From `/proc/mtd` and `/proc/cmdline`:
+
+```
+mtdparts=nor0:0x50000(BOOT0),0x1b0000(KERNEL),0x740000(rootfs),
+  0x500000(res),0x90000(config),0x80000(MISC),0x400000(data),0xCB0000(UDISK)
+```
+
+| Partition | MTD | Size | Mount | Format | Contents |
+|-----------|-----|------|-------|--------|----------|
+| BOOT0 | mtd0 | 320 KB | (not mounted) | raw | SoC bootloader |
+| KERNEL | mtd1 | 1.7 MB | (not mounted) | raw | Linux kernel |
+| rootfs | mtd2 | 7.25 MB | `/` (ro) | SquashFS 4.0 XZ | Base OS: busybox, glibc, zkgui, adbd, kernel modules |
+| res | mtd3 | 5 MB | `/res` (ro) | SquashFS 4.0 XZ | **App library (libzkgui.so)**, UI assets, manifests, fonts |
+| config | mtd4 | 576 KB | `/config` (ro) | SquashFS 4.0 XZ | Board config, display kernel modules, mmap.ini |
+| MISC | mtd5 | 512 KB | `/misc` (tmpfs) | (unused?) | Runtime scratch |
+| data | mtd6 | 4 MB | `/data` (rw) | JFFS2 | preferences.json, wallpaper, property store |
+| UDISK | mtd7 | 12.7 MB | `/mnt/storage` (ro) | VFAT | User storage |
+
+### Firmware updates target mtd3 (res), not mtd2 (rootfs)
+
+The `update.img` from Ulanzi Studio (3,255,513 bytes) matches the SquashFS on
+mtd3 exactly. Firmware updates only replace `/res/` (the application library,
+UI assets, default manifests, and fonts). The base OS in mtd2 is never
+overwritten by normal OTA updates.
+
+---
+
+## Filesystem layout
+
+### Root filesystem (mtd2, read-only)
+
+```
+/bin/zkgui              Main executable (9.5KB launcher, loads libzkgui.so)
+/bin/zkdisplay          Framebuffer display server
+/bin/zkdaemon           Daemon manager
+/bin/adbd               Android Debug Bridge daemon
+/bin/busybox            Minimal busybox (cat, cp, ls, mount, ps, etc.)
+/bin/vold               Volume daemon
+/bin/logd               Log daemon
+/bin/mksh               Shell
+/etc/init.rc            Init script
+/etc/build.prop         Build properties
+/etc/vold.fstab         Volume mount table
+/etc/font/fzcircle.ttf  System font
+/lib/libeasyui.so       ZKSWE EasyUI framework (822KB)
+/lib/libinternalapp.so  Internal app support (181KB)
+/lib/libc-2.30.so       glibc 2.30
+/lib/libstdc++.so.6     GCC 6.4.1 C++ runtime
+/sbin/init              PID 1
+```
+
+### Resource partition (mtd3, read-only, updated by OTA)
+
+```
+/res/lib/libzkgui.so           Main application library (1.3MB) — HID protocol,
+                                 button rendering, manifest parsing, OTA, etc.
+/res/lib/libwebp.so.7          WebP codec
+/res/lib/libwebpdemux.so       WebP demux
+/res/bin/minizip               ZIP extraction tool
+/res/etc/EasyUI.cfg            Application config (see below)
+/res/tr/en_US-ENGLISH.json     English translation strings
+/res/ui/main.ftu               FlyThings UI layout definition
+/res/ui/font/SeoulNamsan_B_3.ttf   UI font
+/res/ui/default/               Default button profiles:
+  manifest0.json                 Windows apps (calc, cmd, notepad, etc.)
+  manifest1.json                 Windows shortcuts (Ctrl+C, screenshot, etc.)
+  manifest2.json                 macOS shortcuts
+  manifest3.json                 macOS apps (Finder, Safari, etc.)
+  Images/*.png                   55 button icons (196x196)
+/res/ui/icon/
+  wallpaper.jpg                  Idle wallpaper (429KB)
+  www_ulanzistudio_com.png       Ulanzi branding QR code
+  exclamation_mark.png           Status overlay icon
+  fail.png                       Error icon
+/res/ui/clock_960_540/           Analog clock face assets (clock, hour, minute, sec PNGs)
+```
+
+### Data partition (mtd6, read-write)
+
+```
+/data/preferences.json    {"sys_brightness_key": 100, "sys_lang_code_key": "en_US", "DefKeyMode": 0}
+/data/wallpaper/          User-uploaded wallpapers
+/data/property/           System property store
+/data/local/              Local data
+```
+
+### Config partition (mtd4, read-only)
+
+```
+/config/board.ini         Board hardware config
+/config/mmap.ini          Memory map
+/config/PQConfig.ini      Picture quality config
+/config/model/Customer.ini  Customer/model config
+/config/modules/*.ko      Kernel modules: fbdev, mhal, mi_ao, mi_common,
+                            mi_disp, mi_divp, mi_gfx, mi_panel, mi_rgn,
+                            mi_sys, mi_vdisp
+```
+
+---
+
+## EasyUI.cfg
+
+Application configuration loaded by `zkgui` at startup:
+
+```json
+{
+  "baud": "115200",
+  "rotateTouch": 90,
+  "rotateScreen": 90,
+  "startupLibPath": "/res/lib/libzkgui.so",
+  "languageCode": "zh_CN",
+  "defBrightness": 100,
+  "screensaverTimeOut": -1,
+  "touchDev": "/dev/input/event0",
+  "languagePath": "/res/tr/",
+  "uart": "ttyS1",
+  "startupTouchCalib": false,
+  "zkdebug": false,
+  "resPath": "/res/ui/"
+}
+```
+
+The `startupLibPath` confirms that `zkgui` is a thin launcher that loads
+`libzkgui.so` at runtime. This is the 1.3MB library containing all protocol
+logic, and is the primary target for Ghidra analysis.
+
+---
+
+## Running processes
+
+```
+PID  USER  VIRT    STAT  COMMAND
+1    root  1944K   S     /sbin/init
+411  root  2040K   S     /sbin/ueventd
+550  root  22340K  S     /bin/vold
+551  1036  31472K  S     /bin/logd
+616  root  10700K  S     /bin/zkdisplay
+622  root  98252K  S     {zkgui_ui} /bin/zkgui
+```
+
+`zkgui` is the main application (98MB virtual, thread name `zkgui_ui`).
+`zkdisplay` handles the framebuffer. No networking stack is running.
 
 ---
 
 ## Extracting the firmware from the installer
 
-The Ulanzi Studio Windows installer is a self-extracting archive. Use 7z to
-unpack it:
+The Ulanzi Studio Windows installer is a self-extracting archive:
 
 ```bash
 mkdir -p /tmp/ulanzi-extract
 7z x -o/tmp/ulanzi-extract Win_Ulanzi_Studio_V3.0.16.20260323.exe -y
 ```
 
-This produces three files:
+This produces:
 
 | File | Purpose |
 |------|---------|
-| `update.img` | Firmware image (3,256,892 bytes) |
-| `binversion` | ASCII version string, e.g. `5.3.1` |
-| `md5.txt` | MD5 hash of `update.img` |
+| `update.img` | Firmware image (3,256,892 bytes, targets mtd3/res partition) |
+| `binversion` | ASCII version string: `5.3.1` |
+| `md5.txt` | MD5 hash: `0b22493ae1178248770857031ba1a97c` |
 
 ---
 
-## ZKSWE firmware image format
+## ZKSWE firmware image format (update.img)
 
 `update.img` uses a proprietary format with the magic `ZKSWEV1.0-180127`. It
-is **not** a standard SquashFS image despite containing an `hsqs` marker at
-offset 0x20. The superblock fields after the marker (compression, version,
-metadata pointers) do not conform to the SquashFS specification. The `hsqs`
-string appears to be a type tag indicating the target partition format, not an
-actual superblock.
+wraps a SquashFS image for the res partition (mtd3). The format is **not** a
+standard SquashFS despite containing an `hsqs` marker at offset 0x20.
 
 ### Layout
 
@@ -63,35 +230,32 @@ Offset    Size       Content
 0x020     4          Type marker: "hsqs"
 0x024     20         SquashFS-like fields (inodes, mkfs_time, block_size, fragments)
 0x038     ~516       Block table (purpose not fully decoded)
-0x23C     32         Hash or checksum (possibly SHA-256 of the payload)
-0x25C     64         Eight u64 LE values resembling SquashFS metadata pointers
+0x23C     32         Hash or checksum
+0x25C     64         Eight u64 LE values (SquashFS-like metadata pointers)
 0x29C     to EOF     XZ-compressed data blocks (51 blocks)
 ```
 
-### Header fields
+### Dumping partitions directly via ADB
 
+With ADB access, you can dump any partition without dealing with the ZKSWE
+format:
+
+```bash
+node tools/enable-adb.mjs
+# wait for ADB
+adb shell "cat /dev/block/mtdblock3 > /tmp/res.img"
+adb pull /tmp/res.img ./mtd3_res.sqfs
+unsquashfs -d ./res mtd3_res.sqfs
 ```
-Offset  Size  Type     Field            Value (v5.3.1)
-0x00    16    ascii    magic            "ZKSWEV1.0-180127"
-0x18    4     u32 LE   entry_count?     572 (0x23C, matches hash offset)
-0x1C    4     u32 LE   payload_size     3,256,320 (total XZ data + metadata)
-0x20    4     ascii    fs_type          "hsqs"
-0x24    4     u32 LE   inodes           77
-0x28    4     u32 LE   mkfs_time        1,772,699,281 (2026-03-05 08:28:01 UTC)
-0x2C    4     u32 LE   block_size       131,072 (128 KB)
-0x30    4     u32 LE   fragments        524
-```
 
-### XZ data blocks
-
-The firmware payload is 51 XZ-compressed blocks starting at offset 0x29C. Each
-decompresses to 131,072 bytes (128 KB), except for a few smaller blocks at
-boundaries. When decompressed and concatenated in order they produce a 5,548,861
-byte flat binary containing the root filesystem contents.
+This produces a standard SquashFS 4.0 image that `unsquashfs` handles directly.
 
 ---
 
-## Decompressing the firmware
+## Decompressing update.img without ADB
+
+If ADB isn't available, the firmware can be decompressed by extracting the XZ
+blocks:
 
 ```python
 import lzma
@@ -101,7 +265,6 @@ with open("update.img", "rb") as f:
 
 XZ_MAGIC = b"\xfd7zXZ\x00"
 
-# Find all XZ block offsets
 offsets = []
 pos = 0
 while True:
@@ -111,7 +274,6 @@ while True:
     offsets.append(idx)
     pos = idx + 1
 
-# Decompress and concatenate
 result = bytearray()
 for i, off in enumerate(offsets):
     end = offsets[i + 1] if i + 1 < len(offsets) else len(data)
@@ -125,155 +287,103 @@ with open("firmware_decompressed.bin", "wb") as f:
     f.write(result)
 ```
 
-Two of the 51 blocks (indices 46 and 48) fail to decompress due to truncated
-XZ streams. The remaining 49 blocks produce the full firmware content.
+The resulting 5.5MB flat binary contains the res partition contents packed
+contiguously (ELF binaries, PNG/JPEG images, JSON manifests). Individual files
+can be extracted with binwalk or manual ELF header parsing.
 
 ---
 
-## Decompressed firmware contents
+## HID command map (from Ghidra disassembly)
 
-The decompressed blob is a flat binary image, not a mountable filesystem. It
-contains ELF binaries, images, and data packed contiguously. Binwalk or manual
-ELF header parsing can extract the individual files.
+The `HidProtocolHelper::processMessage()` function in `libzkgui.so` dispatches
+commands by their wire ID. The Protocol::ID enum values are the wire command
+numbers:
 
-### ELF binaries
+| Wire cmd | Handler | Description |
+|----------|---------|-------------|
+| `0x0003` | `packageDeviceInfo()` | Returns device info JSON (SerialNumber, Dversion, DeviceType, HardwareVersion) |
+| `0x0006` | `Protocol::parse()` | Parses full manifest/layout |
+| `0x000a` | `strtol()` → brightness | Sets backlight brightness (0-100) |
+| `0x000b` | `parseFontInfo()` | Sets default label font style |
+| `0x00d0` | `packageHardwareInfo()` | Returns hardware info JSON |
+| `0x00fe` | `SecurityManager::writeSecData()` | Writes serial number (17 bytes) |
+| `0x00ff` | `SystemProperties::setString("sys.usb.config", "adb")` | **Switches USB to ADB mode** |
 
-| Offset | Type | Size | Identity | Dependencies |
-|--------|------|------|----------|--------------|
-| 0x000000 | Shared lib | 295 KB | `libeasyui.so` (ZKSWE UI framework + libwebp) | libc, libm, libwebp, libgcc_s |
-| 0x047FF0 | Shared lib | 1.3 MB | Main application library (HID protocol, button handling, rendering, OTA) | libeasyui, libfreetype, libjpeg, libpng12, liblog, libdl |
-| 0x49553B | Executable | 58 KB | `zkgui` (main launcher) | libc, libstdc++, libz, libdl, libm |
-| 0x4A3EB4 | Shared lib | 19 KB | WebP demux wrapper (has debug symbols) | libc, libwebp, libwebpdemux |
+Additional commands handled in `threadLoop()` before reaching `processMessage()`
+include `0x0001` (SET_BUTTONS), `0x000d` (PARTIAL_UPDATE), `0x000f` (LOCKSCREEN),
+and `0x0010` (UNLOCKSCREEN). The `DRAW_JS_IMG` handler has not been located in
+the dispatch yet.
 
-### Images
+### Dangerous commands
 
-| Offset | Format | Dimensions | Content |
-|--------|--------|------------|---------|
-| 0x13E910 | PNG | 196x196 | Built-in button icon |
-| 0x154BF0 | PNG | 196x196 | Built-in button icon |
-| 0x16CB8C | PNG | 196x196 | Built-in button icon |
-| 0x19F692 | PNG | 196x196 | Built-in button icon |
-| 0x1EBD00 | PNG | 196x196 | Built-in button icon |
-| 0x251575 | PNG | 196x196 | Built-in button icon |
-| 0x2A792B | JPEG | 1280x720 | Wallpaper / splash screen |
-
-Additional small PNGs (status icons, UI elements) are embedded within the main
-application library at offsets 0x4A8C05 onward.
-
----
-
-## Extracting ELF binaries
-
-ELF files span multiple 128 KB blocks. To extract them properly, parse the
-decompressed blob for `\x7fELF` headers and use the section header table
-offset (`e_shoff`) plus section count to compute the file boundary:
-
-```python
-import struct
-
-with open("firmware_decompressed.bin", "rb") as f:
-    data = f.read()
-
-ELF_MAGIC = b"\x7fELF"
-pos = 0
-while True:
-    idx = data.find(ELF_MAGIC, pos)
-    if idx == -1:
-        break
-    e_shoff = struct.unpack_from("<I", data, idx + 32)[0]
-    e_shentsize = struct.unpack_from("<H", data, idx + 46)[0]
-    e_shnum = struct.unpack_from("<H", data, idx + 48)[0]
-    size = e_shoff + e_shentsize * e_shnum
-    with open(f"elf_0x{idx:06x}.elf", "wb") as out:
-        out.write(data[idx : idx + size])
-    pos = idx + 1
-```
+| Wire cmd | Effect | Recovery |
+|----------|--------|----------|
+| `0x0004` | Kills display application | Replug USB |
+| `0x000f` | Activates lockscreen | Send `0x0010` to unlock |
+| `0x00fe` | Writes serial number to flash | Irreversible (writes to SecurityManager) |
+| `0x00ff` | Switches to ADB, drops HID | Replug USB to restore HID |
 
 ---
 
-## Key strings from the firmware
+## Device info JSON
 
-### Internal protocol commands
+Returned by command `0x0003`:
 
-```
-Protocol::ID::SETKEYPAD
-Protocol::ID::SETSCREEN_PIC
-Protocol::ID::SET_SMALLWINDOW_TO_KNOB
-Protocol::ID::DRAW_JS_IMG
-Protocol::ID::LOCKSCREEN
-Protocol::ID::UNLOCKSCREEN
-Protocol::ID::UPDATE_BIN
-Protocol::ID::APP_EXIT
-Protocol::ID::SHUTDOWN
-Protocol::ID::RUN_RESULT
-```
-
-### Source file references
-
-```
-../src/HidProtocolHelper.cpp
-../src/hid_device.cpp
-../src/hid_protocol.cpp
-../src/update/update.cpp
-```
-
-### Device info fields
-
-```
-SerialNumber / firmwareSN
-Dversion / firmwareVersion
-HardwareVersion / hardwareVersion
-binversion
-```
-
-### Filesystem paths used at runtime
-
-```
-/dev/hidg0              HID gadget (deck protocol)
-/dev/hidg1              HID gadget (keyboard emulation)
-/dev/ttyS1              UART (MCU communication)
-/dev/block/mtdblock*    MTD block devices
-/dev/mtd/mtd*           MTD char devices
-/proc/mtd               Partition table
-/data/wallpaper/        User wallpaper storage
-/boot/%s                Boot partition
-/tmp/update/            OTA staging directory
-/etc/font               Font configuration
+```json
+{
+  "SerialNumber": "02C47A015U3672401",
+  "Dversion": "5.3.1",
+  "error": "0",
+  "DeviceType": "D200",
+  "HardwareVersion": "SSD210V100"
+}
 ```
 
 ---
 
 ## OTA update mechanism
 
-The firmware contains an `UPDATE` class (`update.cpp`) that:
+The firmware `UPDATE` class:
 
-1. Checks for `/tmp/update/update.img` (or similar staging path)
-2. Validates the image with `checkZkImg()` and `hashFile()`
+1. Checks for `update.img` at the staging path
+2. Validates with `checkZkImg()` and `hashFile()`
 3. Remounts partitions read-write
-4. Writes blocks to MTD via `flash_erase -j` and block device writes
-5. An `McuUpdate` class handles MCU firmware over UART (`/dev/ttyS1`)
+4. Writes to mtd3 (res partition) via `flash_erase` and block writes
+5. `McuUpdate` class handles MCU firmware over UART (`/dev/ttyS1`)
 
-The HID protocol exposes `Protocol::ID::UPDATE_BIN` for host-initiated
-firmware updates.
+The HID protocol exposes `UPDATE_BIN` for host-initiated updates.
+
+---
+
+## Key files for reverse engineering
+
+| File | Location | Size | Purpose |
+|------|----------|------|---------|
+| `libzkgui.so` | `/res/lib/` (mtd3) | 1.3 MB | Main app: HID protocol, manifest parsing, rendering, OTA. Primary Ghidra target. |
+| `libeasyui.so` | `/lib/` (mtd2) | 822 KB | ZKSWE UI framework |
+| `libinternalapp.so` | `/lib/` (mtd2) | 181 KB | Internal app support |
+| `zkgui` | `/bin/` (mtd2) | 9.5 KB | Thin launcher, loads libzkgui.so |
+| `EasyUI.cfg` | `/res/etc/` (mtd3) | 238 B | App configuration |
+| `main.ftu` | `/res/ui/` (mtd3) | 1.9 KB | FlyThings UI layout |
+
+Copies for analysis:
+- `tools/libzkgui_d200.elf` (pulled from live device via ADB)
+- `tools/libapp_d200.elf` (extracted from update.img decompression)
 
 ---
 
 ## What's still unknown
 
-- **Block table format** (0x38 to 0x23C): likely compressed block sizes or
-  checksums, but the encoding isn't decoded. Entries follow a `XX 00 00 YY`
-  pattern in groups of 4 bytes.
-- **Hash at 0x23C**: 32 bytes that could be SHA-256 of the payload.
-- **Metadata pointers at 0x25C**: eight u64 LE values that resemble SquashFS
-  table offsets (inode table, directory table, fragment table, etc.) but don't
-  work when grafted into a standard SquashFS superblock. The data at those
-  offsets does not contain valid SquashFS metadata blocks.
-- **How to rebuild a mountable filesystem**: the flat binary doesn't match any
-  standard filesystem format (SquashFS, ext4, cramfs, JFFS2). It may be a raw
-  MTD partition image with a custom layout, or the ZKSWE EasyUI framework may
-  use a proprietary packing scheme.
-- **MTD partition map**: the `/proc/mtd` layout (boot, rootfs, data, etc.) is
-  not known without a live shell on the device.
-- **MCU firmware**: a separate microcontroller handles button scanning and
-  display driving; its firmware is updated over UART via `McuUpdate` and is
-  not included in this image.
+- **DRAW_JS_IMG wire command number**: not found in `processMessage()`. Likely
+  dispatched in `threadLoop()` before reaching processMessage, or handled by a
+  different code path. The `Protocol::parseJSData()` function exists at a known
+  address and is the next Ghidra target.
+- **Block table format** (0x38 to 0x23C in update.img): likely compressed block
+  sizes or checksums, encoding not decoded.
+- **Hash at 0x23C**: 32 bytes, possibly SHA-256 of the payload.
+- **MCU firmware**: separate microcontroller on UART ttyS1, firmware not in
+  update.img. Updated via `McuUpdate` class.
+- **`IconEx` field semantics**: parsed alongside `Icon` in manifests, purpose
+  unclear.
+- **Boot partition (mtd0)**: SoC bootloader, not dumped.
+- **Kernel (mtd1)**: Linux kernel image, not analyzed.
