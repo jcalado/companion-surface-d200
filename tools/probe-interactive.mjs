@@ -262,6 +262,11 @@ async function main() {
         log.push({ cmd: hexCmd(cmd), emptyPayload: { responses: ['SKIP'], visual: 'destructive (kills screen)' } })
         continue
       }
+      if (SKIP_KNOWN_EFFECT.has(cmd)) {
+        const names = { 0x0003: 'GET_DEVICE_INFO', 0x000f: 'LOCKSCREEN', 0x0010: 'UNLOCKSCREEN' }
+        console.log(`${hexCmd(cmd)} = ${names[cmd]} (already mapped, skipping)`)
+        continue
+      }
 
       console.log(`\n${'='.repeat(50)}`)
       console.log(`Testing ${hexCmd(cmd)} with empty payload...`)
