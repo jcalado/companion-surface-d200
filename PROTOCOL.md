@@ -124,27 +124,56 @@ Incoming commands observed so far:
 | `IN_DEVICE_INFO` | `0x0303` | Firmware/device info (JSON, sent after most OUT commands) |
 | `0x010b`         | `0x010b` | Ack/status (seen after each outgoing command). Payload is all zeros so far; safe to ignore. |
 
+### Confirmed commands from probing (2026-04-21)
+
+Wire probing of commands `0x0002`..`0x0020` confirmed these new command IDs:
+
+| Command | Value | Meaning |
+|---------|-------|---------|
+| `OUT_GET_DEVICE_INFO` | `0x0003` | Requests device info; device replies with `IN_DEVICE_INFO` JSON |
+| `OUT_SHUTDOWN` | `0x0004` | Kills the display application. Requires physical replug to recover. |
+| `OUT_LOCKSCREEN` | `0x000f` | Activates the lockscreen (screen goes dark with Ulanzi-branded idle icons). Sending a JSON manifest payload causes a brief render flash before locking. |
+| `OUT_UNLOCKSCREEN` | `0x0010` | Deactivates the lockscreen, restores normal display. |
+
+Note: the firmware ACKs (`0x010b`) every command number, even unrecognized
+ones. Only commands with an observable effect are listed above. The range
+`0x0011`..`0x0020` produced no visible effect with empty or JSON payloads.
+
+### `IN_DEVICE_INFO` JSON format
+
+The full JSON returned by `OUT_GET_DEVICE_INFO` (`0x0003`) and after most
+outgoing commands:
+
+```json
+{
+  "SerialNumber": "02C47A015U3672401",
+  "Dversion": "5.3.1",
+  "error": "0",
+  "DeviceType": "D200",
+  "HardwareVersion": "SSD210V100"
+}
+```
+
+The `HardwareVersion` confirms the SoC is **SigmaStar SSD210**, not Allwinner
+T113 (both are supported by the shared firmware).
+
 ### Additional command IDs found in firmware strings
 
 These internal protocol IDs were discovered via firmware binary analysis. They
-are referenced in the device's C++ source (`hid_protocol.cpp`) and may
-correspond to undiscovered wire command numbers:
+are referenced in the device's C++ source (`hid_protocol.cpp`). Some have been
+mapped to wire command numbers (above), others remain unknown:
 
-| Internal name | Notes |
-|---------------|-------|
-| `SETKEYPAD` | May configure button/key mappings |
-| `SETSCREEN_PIC` | Possibly a direct screen-image push (bypassing the ZIP manifest) |
-| `SET_SMALLWINDOW_TO_KNOB` | Displays knob-related content in the small window (dead on D200, which has no knob hardware) |
-| `DRAW_JS_IMG` | JSON-manifest image push with `data:image/` URI support (see [DRAW_JS_IMG](#draw_js_img)) |
-| `LOCKSCREEN` / `UNLOCKSCREEN` | Lock/unlock the device display; `UNLOCKSCREEN` takes an ID parameter |
-| `UPDATE_BIN` | Host-initiated firmware update over HID |
-| `APP_EXIT` | Terminates the running application |
-| `SHUTDOWN` | Powers off the device |
-| `RUN_RESULT` | Status/result reporting (direction unknown) |
-
-None of these have been captured on the wire yet. Probing for their command
-numbers (sending candidate values and observing responses) could unlock new
-functionality.
+| Internal name | Wire cmd | Notes |
+|---------------|----------|-------|
+| `LOCKSCREEN` | `0x000f` | Confirmed via probing |
+| `UNLOCKSCREEN` | `0x0010` | Confirmed via probing |
+| `SHUTDOWN` or `APP_EXIT` | `0x0004` | Confirmed via probing (destructive) |
+| `SETKEYPAD` | ? | May configure button/key mappings |
+| `SETSCREEN_PIC` | ? | Possibly a direct screen-image push (bypassing the ZIP manifest) |
+| `SET_SMALLWINDOW_TO_KNOB` | ? | Displays knob-related content in the small window (dead on D200, no knob hardware) |
+| `DRAW_JS_IMG` | ? | JSON-manifest image push with `data:image/` URI support (see [DRAW_JS_IMG](#draw_js_img)). Not in `0x0002`..`0x0020` range. |
+| `UPDATE_BIN` | ? | Host-initiated firmware update over HID |
+| `RUN_RESULT` | ? | Status/result reporting (direction unknown) |
 
 ---
 
