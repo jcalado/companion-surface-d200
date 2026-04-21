@@ -332,6 +332,40 @@ Rules:
   }
   ```
 
+### Additional manifest fields (from firmware analysis)
+
+The manifest parser (`processLayoutValue` in the firmware) accepts fields
+beyond what Ulanzi Studio uses in captures:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `Icon` | string | Path inside ZIP (`Images/foo.png`) **or** a `data:image/...` base64 data URI |
+| `IconEx` | string | Extended icon field, parsed alongside `Icon`. Purpose unclear; possibly for alternate-state icons. |
+| `Action` | string | Action identifier for standalone mode (e.g. `com.ulanzi.ulanzideck.system.open`) |
+| `ActionParam` | object | Parameters for the action (e.g. `{"Path": "calc"}`) |
+
+The `data:image/` support on `Icon` is significant: it means the device can
+accept inline base64-encoded images in the JSON manifest, potentially
+bypassing ZIP packaging entirely. See [DRAW_JS_IMG](#draw_js_img) below.
+
+### Default profiles baked into firmware
+
+The firmware embeds four default manifest profiles used when no host is
+connected. Each uses `manifest{0..3}.json`:
+
+| Profile | Target OS | Buttons | Knob row |
+|---------|-----------|---------|----------|
+| 0 | Windows | Apps (calc, cmd, notepad, explorer, etc.) | Yes (`0_3`..`4_3`) |
+| 1 | Windows | Shortcuts (Ctrl+S, Ctrl+Z, Ctrl+C, screenshot, etc.) | Yes |
+| 2 | macOS | Shortcuts (Cmd+C, Cmd+V, screenshot, etc.) | No |
+| 3 | macOS | Apps (App Store, Calendar, Finder, Safari, etc.) | No |
+
+Profiles 0 and 1 include a "row 3" (`0_3` through `4_3`) for knob actions
+(`volumeSw`). The D200 has no knob hardware, so these entries are dead code.
+The firmware is shared across multiple ZKSWE devices, some of which have up to
+three knobs (`KNOB_1`/`KNOB_2`/`KNOB_3`). Other SoC targets in the firmware
+include SSD201, SSD210, and T113.
+
 ### Firmware quirk: unsafe byte offsets
 
 The firmware has a bug decoding the chunked ZIP. The first byte of every
