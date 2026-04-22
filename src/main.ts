@@ -31,7 +31,7 @@ const D200Plugin: SurfacePlugin<D200PluginInfo> = {
 		if (device.vendorId !== D200_VENDOR_ID || device.productId !== D200_PRODUCT_ID) return null
 		// Only claim interface 0 (deck protocol). Interface 1 is the keyboard emulation
 		// which should stay bound to usbhid so host hotkeys keep working.
-		if (device.interface !== D200_INTERFACE_NUMBER) return null
+		if (device.interface !== D200_INTERFACE_NUMBER && device.interface !== -1) return null
 		return {
 			surfaceId: `ulanzi-d200:${device.serialNumber ?? device.path}`,
 			description: 'Ulanzi Stream Controller D200',
