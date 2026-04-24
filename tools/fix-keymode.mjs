@@ -100,7 +100,7 @@ async function switchToAdb() {
 
 function freezeZkgui() {
   const { stdout } = adbShell(
-    "ps 2>/dev/null | awk '/[ \\/]zkgui( |$)|\\/zkgui$/ {print $1}'",
+    `ps 2>/dev/null | awk '$NF ~ "/zkgui$" {print $1}'`,
   )
   const pids = stdout
     .split(/\s+/).map((s) => s.trim())

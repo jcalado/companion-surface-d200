@@ -159,8 +159,10 @@ function freezeZkgui() {
   // SIGSTOP all zkgui processes so they cannot re-set sys.usb.config back
   // to "hid" or restart adbd. Read-only side effect; SIGCONT or replug restores.
   // Resolve PIDs via `ps | awk` to avoid relying on `pidof` being on PATH.
+  // Match lines whose last field is /bin/zkgui (or any */zkgui). Avoids both
+  // awk-regex-escaping pitfalls and false positives from the `awk` line itself.
   const { stdout } = adbShell(
-    "ps 2>/dev/null | awk '/[ \\/]zkgui( |$)|\\/zkgui$/ {print $1}'",
+    `ps 2>/dev/null | awk '$NF ~ "/zkgui$" {print $1}'`,
   )
   const pids = stdout
     .split(/\s+/)
