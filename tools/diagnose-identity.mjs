@@ -52,7 +52,10 @@ const FILES = [
 // Best-effort dirs to recursively pull (small, rw, may hold model overrides).
 const DIRS = ['/data/property', '/data/local', '/config/model']
 
-// Shell commands to capture into named text files.
+// Shell commands to capture into named text files. Every command runs through
+// `runOnDevice()` which prepends a busybox-friendly PATH and falls back to
+// `busybox <applet>` so things like md5sum/grep/sort work even when /bin
+// isn't already on PATH (which is the case on this firmware).
 const COMMANDS = {
   'proc_mtd.txt': 'cat /proc/mtd',
   'proc_cmdline.txt': 'cat /proc/cmdline',
@@ -71,6 +74,9 @@ const COMMANDS = {
   'res_lib_listing.txt': 'ls -lR /res/lib 2>/dev/null',
   'data_listing.txt': 'ls -lR /data 2>/dev/null',
   'config_listing.txt': 'ls -lR /config 2>/dev/null',
+  'busybox_applets.txt': 'busybox --list 2>/dev/null',
+  'which_tools.txt':
+    'for c in pidof md5sum grep sort strings dd find; do printf "%s=" "$c"; command -v "$c" 2>/dev/null || echo "(missing)"; done',
 }
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)) }
@@ -82,7 +88,11 @@ function adb(...args) {
   if (result.error) throw result.error
   return { stdout: result.stdout ?? '', stderr: result.stderr ?? '', status: result.status }
 }
-function adbShell(cmd) { return adb('shell', cmd) }
+// Runs a shell command on the device with /bin & friends on PATH. The device's
+// init shell ships without /bin in PATH, so common busybox applets like
+// pidof/md5sum/grep/sort would otherwise be "not found".
+const SHELL_PRELUDE = 'export PATH=/bin:/sbin:/usr/bin:/usr/sbin:$PATH; '
+function adbShell(cmd) { return adb('shell', SHELL_PRELUDE + cmd) }
 function adbPull(remote, local) { return adb('pull', remote, local) }
 
 function isAdbConnected() {
@@ -148,8 +158,14 @@ async function switchToAdb() {
 function freezeZkgui() {
   // SIGSTOP all zkgui processes so they cannot re-set sys.usb.config back
   // to "hid" or restart adbd. Read-only side effect; SIGCONT or replug restores.
-  const { stdout } = adbShell('pidof zkgui')
-  const pids = stdout.trim().split(/\s+/).filter(Boolean)
+  // Resolve PIDs via `ps | awk` to avoid relying on `pidof` being on PATH.
+  const { stdout } = adbShell(
+    "ps 2>/dev/null | awk '/[ \\/]zkgui( |$)|\\/zkgui$/ {print $1}'",
+  )
+  const pids = stdout
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .filter((s) => /^[0-9]+$/.test(s))
   if (pids.length === 0) {
     console.log('  zkgui not running (already crashed?). Skipping freeze.')
     return false
