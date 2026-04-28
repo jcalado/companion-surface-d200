@@ -2,7 +2,7 @@ import EventEmitter from 'node:events'
 import os from 'node:os'
 import type { HIDAsync } from 'node-hid'
 import {
-	type ButtonEvent,
+	type InputEvent,
 	Command,
 	type LabelStyle,
 	PACKET_SIZE,
@@ -19,7 +19,7 @@ import { type ButtonRenderInput, buildButtonZip } from './zip-builder.js'
 
 export interface D200Events {
 	error: [error: Error]
-	button: [event: ButtonEvent]
+	input: [event: InputEvent]
 	deviceInfo: [info: string]
 	log: [line: string]
 }
@@ -54,9 +54,10 @@ export class D200Device extends EventEmitter<D200Events> {
 				this.emit('log', `RX unparsed`)
 				return
 			}
-			if (parsed.kind === 'button') {
-				this.emit('log', `RX button idx=${parsed.event.index} pressed=${parsed.event.pressed} state=${parsed.event.state}`)
-				this.emit('button', parsed.event)
+			if (parsed.kind === 'input') {
+				const e = parsed.event
+				this.emit('log', `RX input idx=${e.index} type=${e.type} action=${e.action} state=${e.state}`)
+				this.emit('input', e)
 			} else if (parsed.kind === 'info') {
 				this.emit('deviceInfo', parsed.info)
 			}

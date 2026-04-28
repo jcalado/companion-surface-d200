@@ -19,7 +19,7 @@ import {
 	SMALL_WINDOW_BG_WIDTH,
 } from './protocol.js'
 import { type ButtonRenderInput } from './zip-builder.js'
-import { BUTTON_POSITIONS, controlIdFromIndex, positionFromControlId } from './surface-schema.js'
+import { LCD_BUTTON_POSITIONS, controlIdFromIndex, positionFromControlId } from './surface-schema.js'
 
 export class D200Surface implements SurfaceInstance {
 	readonly #logger: ModuleLogger
@@ -52,11 +52,23 @@ export class D200Surface implements SurfaceInstance {
 			this.#logger.error(`D200 error: ${e.message}`)
 			context.disconnect(e)
 		})
-		this.#device.on('button', ({ index, pressed }) => {
-			const controlId = controlIdFromIndex(index)
+		this.#device.on('input', (event) => {
+			const controlId = controlIdFromIndex(event.index)
 			if (!controlId) return
-			if (pressed) this.#context.keyDownById(controlId)
-			else this.#context.keyUpById(controlId)
+
+			if (event.type === 'encoder') {
+				if (event.action === 'left') this.#context.rotateLeftById(controlId)
+				else if (event.action === 'right') this.#context.rotateRightById(controlId)
+				else if (event.action === 'press') this.#context.keyDownById(controlId)
+				else if (event.action === 'release') this.#context.keyUpById(controlId)
+			} else if (controlId === 'page_left') {
+				if (event.action === 'press') this.#context.changePage(false)
+			} else if (controlId === 'page_right') {
+				if (event.action === 'press') this.#context.changePage(true)
+			} else {
+				if (event.action === 'press') this.#context.keyDownById(controlId)
+				else if (event.action === 'release') this.#context.keyUpById(controlId)
+			}
 		})
 		this.#device.on('deviceInfo', (info) => {
 			this.#logger.info(`Device info: ${info}`)
@@ -65,7 +77,7 @@ export class D200Surface implements SurfaceInstance {
 	}
 
 	async init(): Promise<void> {
-		for (const pos of BUTTON_POSITIONS) {
+		for (const pos of LCD_BUTTON_POSITIONS) {
 			const key = `${pos.col}_${pos.row}`
 			this.#pending.set(key, { col: pos.col, row: pos.row })
 		}
@@ -121,7 +133,7 @@ export class D200Surface implements SurfaceInstance {
 	}
 
 	async blank(): Promise<void> {
-		for (const pos of BUTTON_POSITIONS) {
+		for (const pos of LCD_BUTTON_POSITIONS) {
 			this.#pending.set(`${pos.col}_${pos.row}`, { col: pos.col, row: pos.row })
 		}
 		await this.#flush(false)
@@ -182,7 +194,7 @@ export class D200Surface implements SurfaceInstance {
 		])
 		if (signal.aborted) return
 
-		const batch: ButtonRenderInput[] = BUTTON_POSITIONS.map((pos) => ({
+		const batch: ButtonRenderInput[] = LCD_BUTTON_POSITIONS.map((pos) => ({
 			col: pos.col,
 			row: pos.row,
 			iconPng: buttonPng,
@@ -215,7 +227,7 @@ export class D200Surface implements SurfaceInstance {
 			this.#statusActive = false
 			this.#device.resumeKeepAlive()
 			isPartial = false
-			for (const pos of BUTTON_POSITIONS) {
+			for (const pos of LCD_BUTTON_POSITIONS) {
 				const key = `${pos.col}_${pos.row}`
 				if (!this.#pending.has(key)) this.#pending.set(key, { col: pos.col, row: pos.row })
 			}

@@ -132,16 +132,17 @@ export function isPayloadSafe(payload: Buffer): boolean {
 	return true
 }
 
-export interface ButtonEvent {
+export interface InputEvent {
 	state: number
 	index: number
-	pressed: boolean
+	type: 'button' | 'encoder'
+	action: 'press' | 'release' | 'left' | 'right'
 }
 
 /** Parse an incoming HID report. Returns null if not recognised. */
 export function parseIncoming(
 	report: Buffer,
-): { kind: 'button'; event: ButtonEvent } | { kind: 'info'; info: string } | null {
+): { kind: 'input'; event: InputEvent } | { kind: 'info'; info: string } | null {
 	if (report.length < HEADER_SIZE) return null
 	if (report[0] !== 0x7c || report[1] !== 0x7c) return null
 	const command = report.readUInt16BE(2)
@@ -150,13 +151,19 @@ export function parseIncoming(
 
 	if (command === Command.IN_BUTTON) {
 		if (data.length < 4) return null
+		let type: 'button' | 'encoder' = data[2] === 0x02 ? 'encoder' : 'button'
+		let action: 'press' | 'release' | 'left' | 'right' = 'release'
+		if (data[3] === 0x01) action = 'press'
+		else if (data[3] === 0x02) action = 'left'
+		else if (data[3] === 0x03) action = 'right'
+		
 		return {
-			kind: 'button',
+			kind: 'input',
 			event: {
 				state: data[0],
 				index: data[1],
-				// data[2] === 0x01 sentinel
-				pressed: data[3] === 0x01,
+				type,
+				action,
 			},
 		}
 	}
