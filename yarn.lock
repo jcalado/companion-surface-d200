@@ -47,12 +47,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@companion-surface/base@npm:~1.1.0":
-  version: 1.1.3
-  resolution: "@companion-surface/base@npm:1.1.3"
+"@companion-surface/base@npm:~1.4.1":
+  version: 1.4.1
+  resolution: "@companion-surface/base@npm:1.4.1"
   dependencies:
-    tslib: "npm:^2.8.1"
-  checksum: 10c0/9d83d072e3b2bf1ce3496f6bfa623b17df74d7c55f424361312c244f816abc71912989a96aa9d99cb9faec4e14b873c163a1ebbd660be3e10d344e450360c5f5
+    zod: "npm:^4.4.3"
+  checksum: 10c0/263e078ffeaf7c274d5e225a9a119be2c244afdefb3cbcd898101f7f269b29c0fc60b7a130ad4e5632fb52b5c69b4410ef60ec18ed6c479212dc221b3cf1e6a5
   languageName: node
   linkType: hard
 
@@ -984,7 +984,7 @@ __metadata:
   resolution: "companion-surface-ulanzi-stream-controller@workspace:."
   dependencies:
     "@companion-module/tools": "npm:^2.7.1"
-    "@companion-surface/base": "npm:~1.1.0"
+    "@companion-surface/base": "npm:~1.4.1"
     "@julusian/image-rs": "npm:^2.1.1"
     "@types/node": "npm:^22.19.15"
     eslint: "npm:^9.39.4"
@@ -2714,13 +2714,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tslib@npm:^2.8.1":
-  version: 2.8.1
-  resolution: "tslib@npm:2.8.1"
-  checksum: 10c0/9c4759110a19c53f992d9aae23aac5ced636e99887b51b9e61def52611732872ff7668757d4e4c61f19691e36f4da981cd9485e869b4a7408d689f6bf1f14e62
-  languageName: node
-  linkType: hard
-
 "type-check@npm:^0.4.0, type-check@npm:~0.4.0":
   version: 0.4.0
   resolution: "type-check@npm:0.4.0"
@@ -3012,6 +3005,13 @@ __metadata:
   version: 1.2.2
   resolution: "yocto-queue@npm:1.2.2"
   checksum: 10c0/36d4793e9cf7060f9da543baf67c55e354f4862c8d3d34de1a1b1d7c382d44171315cc54abf84d8900b8113d742b830108a1434f4898fb244f9b7e8426d4b8f5
+  languageName: node
+  linkType: hard
+
+"zod@npm:^4.4.3":
+  version: 4.6.7
+  resolution: "zod@npm:4.6.7"
+  checksum: 10c0/4ce2eb14034317b7254e347ca37b5ad591cf8333147030cf05b9b5d31692d45073f7f2747aa50cf8c6b29012194d2b22978cecc89969cf34a0d18e89d0ee7d7b
   languageName: node
   linkType: hard
 

@@ -21,6 +21,7 @@ import { SMALL_WINDOW_DISABLED } from './config.js'
 import { type ButtonRenderInput } from './zip-builder.js'
 import {
 	LCD_BUTTON_POSITIONS,
+	controlIdFor,
 	controlIdFromIndex,
 	positionFromControlId,
 	virtualTurnControlId,
@@ -32,7 +33,7 @@ export class D200Surface implements SurfaceInstance {
 	readonly #context: SurfaceContext
 	readonly #device: D200Device
 
-	/** Keyed by controlId (`col_row`). */
+	/** Keyed by controlId (`col-row`). */
 	readonly #pending = new Map<string, ButtonRenderInput>()
 	readonly #renderCache = new Map<string, ButtonRenderInput>()
 	#flushTimer?: NodeJS.Timeout
@@ -103,14 +104,14 @@ export class D200Surface implements SurfaceInstance {
 			}
 			else if (event.action === 'press') this.#context.keyDownById(controlId)
 			else if (event.action === 'release') this.#context.keyUpById(controlId)
-		} else if (controlId === 'page_left') {
+		} else if (controlId === 'page-left') {
 			if (this.#pageButtonsNavigate) {
 				if (event.action === 'press') this.#context.changePage(false)
 			} else {
 				if (event.action === 'press') this.#context.keyDownById(controlId)
 				else if (event.action === 'release') this.#context.keyUpById(controlId)
 			}
-		} else if (controlId === 'page_right') {
+		} else if (controlId === 'page-right') {
 			if (this.#pageButtonsNavigate) {
 				if (event.action === 'press') this.#context.changePage(true)
 			} else {
@@ -125,7 +126,7 @@ export class D200Surface implements SurfaceInstance {
 
 	async init(): Promise<void> {
 		for (const pos of LCD_BUTTON_POSITIONS) {
-			const key = `${pos.col}_${pos.row}`
+			const key = controlIdFor(pos.col, pos.row)
 			const blank = { col: pos.col, row: pos.row }
 			this.#pending.set(key, blank)
 			this.#renderCache.set(key, blank)
@@ -168,7 +169,7 @@ export class D200Surface implements SurfaceInstance {
 
 	async blank(): Promise<void> {
 		for (const pos of LCD_BUTTON_POSITIONS) {
-			this.#pending.set(`${pos.col}_${pos.row}`, { col: pos.col, row: pos.row })
+			this.#pending.set(controlIdFor(pos.col, pos.row), { col: pos.col, row: pos.row })
 		}
 		await this.#flush(false)
 	}
@@ -176,7 +177,7 @@ export class D200Surface implements SurfaceInstance {
 	async draw(signal: AbortSignal, drawProps: SurfaceDrawProps): Promise<void> {
 		const pos = positionFromControlId(drawProps.controlId)
 		if (!pos) return
-		const key = `${pos.col}_${pos.row}`
+		const key = controlIdFor(pos.col, pos.row)
 		const isSmallWindowSlot = pos.col === 3 && pos.row === 2
 
 		if (!drawProps.image) {
@@ -263,7 +264,7 @@ export class D200Surface implements SurfaceInstance {
 			this.#resumeSmallWindowUpdates()
 			isPartial = false
 			for (const pos of LCD_BUTTON_POSITIONS) {
-				const key = `${pos.col}_${pos.row}`
+				const key = controlIdFor(pos.col, pos.row)
 				if (!this.#pending.has(key)) this.#pending.set(key, { col: pos.col, row: pos.row })
 			}
 		}
@@ -333,7 +334,7 @@ export class D200Surface implements SurfaceInstance {
 
 	#restoreCachedButtonsToPending(): void {
 		for (const pos of LCD_BUTTON_POSITIONS) {
-			const key = `${pos.col}_${pos.row}`
+			const key = controlIdFor(pos.col, pos.row)
 			this.#pending.set(key, this.#renderCache.get(key) ?? { col: pos.col, row: pos.row })
 		}
 	}
