@@ -35,12 +35,12 @@ interface VirtualControlDef {
 }
 
 const VIRTUAL_ENCODER_TURN_CONTROLS: ReadonlyArray<VirtualControlDef> = [
-	{ controlId: 'enc_1_left', col: 0, row: 4 },
-	{ controlId: 'enc_1_right', col: 1, row: 4 },
-	{ controlId: 'enc_2_left', col: 2, row: 4 },
-	{ controlId: 'enc_2_right', col: 3, row: 4 },
-	{ controlId: 'enc_3_left', col: 1, row: 5 },
-	{ controlId: 'enc_3_right', col: 2, row: 5 },
+	{ controlId: 'enc-1-left', col: 0, row: 4 },
+	{ controlId: 'enc-1-right', col: 1, row: 4 },
+	{ controlId: 'enc-2-left', col: 2, row: 4 },
+	{ controlId: 'enc-2-right', col: 3, row: 4 },
+	{ controlId: 'enc-3-left', col: 1, row: 5 },
+	{ controlId: 'enc-3-right', col: 2, row: 5 },
 ]
 
 /**
@@ -56,27 +56,32 @@ const VIRTUAL_ENCODER_TURN_CONTROLS: ReadonlyArray<VirtualControlDef> = [
  * Index 19: encoder 3
  */
 const INPUT_CONTROLS: ReadonlyArray<InputControlDef | null> = [
-	{ controlId: '0_0', type: 'button', col: 0, row: 0 },
-	{ controlId: '1_0', type: 'button', col: 1, row: 0 },
-	{ controlId: '2_0', type: 'button', col: 2, row: 0 },
-	{ controlId: '3_0', type: 'button', col: 3, row: 0 },
-	{ controlId: '4_0', type: 'button', col: 4, row: 0 },
-	{ controlId: '0_1', type: 'button', col: 0, row: 1 },
-	{ controlId: '1_1', type: 'button', col: 1, row: 1 },
-	{ controlId: '2_1', type: 'button', col: 2, row: 1 },
-	{ controlId: '3_1', type: 'button', col: 3, row: 1 },
-	{ controlId: '4_1', type: 'button', col: 4, row: 1 },
-	{ controlId: '0_2', type: 'button', col: 0, row: 2 },
-	{ controlId: '1_2', type: 'button', col: 1, row: 2 },
-	{ controlId: '2_2', type: 'button', col: 2, row: 2 },
-	{ controlId: '3_2', type: 'button', col: 3, row: 2 },
+	{ controlId: '0-0', type: 'button', col: 0, row: 0 },
+	{ controlId: '1-0', type: 'button', col: 1, row: 0 },
+	{ controlId: '2-0', type: 'button', col: 2, row: 0 },
+	{ controlId: '3-0', type: 'button', col: 3, row: 0 },
+	{ controlId: '4-0', type: 'button', col: 4, row: 0 },
+	{ controlId: '0-1', type: 'button', col: 0, row: 1 },
+	{ controlId: '1-1', type: 'button', col: 1, row: 1 },
+	{ controlId: '2-1', type: 'button', col: 2, row: 1 },
+	{ controlId: '3-1', type: 'button', col: 3, row: 1 },
+	{ controlId: '4-1', type: 'button', col: 4, row: 1 },
+	{ controlId: '0-2', type: 'button', col: 0, row: 2 },
+	{ controlId: '1-2', type: 'button', col: 1, row: 2 },
+	{ controlId: '2-2', type: 'button', col: 2, row: 2 },
+	{ controlId: '3-2', type: 'button', col: 3, row: 2 },
 	null,
-	{ controlId: 'page_left',  type: 'page',    col: 0, row: 3 },
-	{ controlId: 'page_right', type: 'page',    col: 4, row: 3 },
-	{ controlId: 'enc_1',      type: 'encoder', col: 1, row: 3 },
-	{ controlId: 'enc_2',      type: 'encoder', col: 2, row: 3 },
-	{ controlId: 'enc_3',      type: 'encoder', col: 3, row: 3 },
+	{ controlId: 'page-left',  type: 'page',    col: 0, row: 3 },
+	{ controlId: 'page-right', type: 'page',    col: 4, row: 3 },
+	{ controlId: 'enc-1',      type: 'encoder', col: 1, row: 3 },
+	{ controlId: 'enc-2',      type: 'encoder', col: 2, row: 3 },
+	{ controlId: 'enc-3',      type: 'encoder', col: 3, row: 3 },
 ]
+
+/** Companion control ids may only contain `[a-zA-Z0-9\-/]`, so grid buttons use `col-row`. */
+export function controlIdFor(col: number, row: number): string {
+	return `${col}-${row}`
+}
 
 export function controlIdFromIndex(index: number): string | null {
 	return INPUT_CONTROLS[index]?.controlId ?? null
@@ -99,22 +104,22 @@ export function positionFromControlId(controlId: string): { col: number; row: nu
 }
 
 export function virtualTurnControlId(controlId: string, direction: 'left' | 'right'): string | null {
-	if (controlId !== 'enc_1' && controlId !== 'enc_2' && controlId !== 'enc_3') return null
-	return `${controlId}_${direction}`
+	if (controlId !== 'enc-1' && controlId !== 'enc-2' && controlId !== 'enc-3') return null
+	return `${controlId}-${direction}`
 }
 
 /**
  * Numpad-style pincode entry: 7/8/9 on the top row, 4/5/6 middle,
- * 1/2/3 bottom, 0 next to 6. The small-window button (3_2) is available
+ * 1/2/3 bottom, 0 next to 6. The small-window button (3-2) is available
  * as a general-purpose control but not assigned a pincode digit.
  */
 export const PINCODE_MAP: SurfacePincodeMap = {
 	type: 'single-page',
 	pincode: null,
-	7: '0_0', 8: '1_0', 9: '2_0',
-	4: '0_1', 5: '1_1', 6: '2_1',
-	1: '0_2', 2: '1_2', 3: '2_2',
-	0: '3_1',
+	7: '0-0', 8: '1-0', 9: '2-0',
+	4: '0-1', 5: '1-1', 6: '2-1',
+	1: '0-2', 2: '1-2', 3: '2-2',
+	0: '3-1',
 }
 
 export function createSurfaceSchema(): SurfaceSchemaLayoutDefinition {
@@ -131,7 +136,7 @@ export function createSurfaceSchema(): SurfaceSchemaLayoutDefinition {
 		controls: {},
 	}
 	for (const { col, row } of LCD_BUTTON_POSITIONS) {
-		layout.controls[`${col}_${row}`] = {
+		layout.controls[controlIdFor(col, row)] = {
 			row,
 			column: col,
 			stylePreset: col === 3 && row === 2 ? 'wide' : 'button',
